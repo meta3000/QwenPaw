@@ -10,7 +10,14 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from ..harnesses.events import HarnessHistoryItem
+
+class HarnessHistoryItem(BaseModel):
+    """A single message in an imported conversation history."""
+
+    role: str
+    content: str = ""
+    timestamp: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class SourceLocation(BaseModel):

@@ -4,16 +4,34 @@ from __future__ import annotations
 
 import logging
 import mimetypes
+from pathlib import Path
 from typing import Any, List
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from ..constant import (
     EXTERNAL_USER_QUERY_MESSAGE_TAG,
     QWENPAW_MESSAGE_TAG_KEY,
 )
-from .._compat.message import _ensure_url_scheme
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_url_scheme(url: str) -> str:
+    """Prepend ``file://`` when *url* is an absolute local path."""
+    if url.startswith(("/", "~")):
+        resolved = str(Path(unquote(url)).expanduser().resolve())
+    elif len(url) >= 3 and url[1] == ":" and url[2] in ("/", "\\"):
+        resolved = str(Path(unquote(url)).resolve())
+    elif url.startswith("\\\\"):
+        resolved = unquote(url)
+    else:
+        return url
+    resolved = resolved.replace("\\", "/")
+    if resolved.startswith("//"):
+        return "file://" + resolved.lstrip("/")
+    if not resolved.startswith("/"):
+        resolved = "/" + resolved
+    return "file://" + resolved
 
 
 def _request_message_metadata(

@@ -86,10 +86,6 @@ class WorkspaceBootstrapFactory:
                 SkillEnvCleanupHook,
                 SkillEnvHook,
             )
-            from ...checkpoints.hooks import (
-                CheckpointAutoSnapshotHook,
-                CheckpointQueryGateHook,
-            )
 
             hook_clses: list[type] = [
                 CronContextHook,
@@ -105,8 +101,6 @@ class WorkspaceBootstrapFactory:
                 MediaProcessHook,
                 ErrorNormalizeHook,
                 CancelCleanupHook,
-                CheckpointQueryGateHook,
-                CheckpointAutoSnapshotHook,
                 MailF1CleanupHook,
             ]
             if extra_hook_clses:
@@ -142,14 +136,10 @@ class WorkspaceBootstrapFactory:
         try:
             from ...modes.coding import CodingMode
             from ...modes.default import DefaultMode
-            from ...modes.goal import GoalMode
-            from ...modes.mission import MissionMode
 
             kwargs["builtin_mode_clses"] = [
                 DefaultMode,
                 CodingMode,
-                MissionMode,
-                GoalMode,
             ]
         except Exception:
             logger.debug("Modes not available", exc_info=True)

@@ -2,7 +2,6 @@
 import logging
 import os
 import time
-from . import _compat as _compat_bootstrap
 from .utils.logging import setup_logger
 
 # Fallback before we can safely read canonical constant definitions.

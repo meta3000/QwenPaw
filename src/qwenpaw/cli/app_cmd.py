@@ -8,7 +8,6 @@ import click
 import uvicorn
 
 from ..app.auth import is_auth_enabled
-from ..browser.control_link.chrome.protocol import NM_MAX_INBOUND_BYTES
 from ..config.utils import write_last_api
 from ..constant import LOG_LEVEL_ENV
 from ..utils.http import is_loopback_host, probe_host_for_bind_host
@@ -166,7 +165,6 @@ def app_cmd(
         log_level=log_level,
         # Bound shutdown so workspace SSE connections cannot block exit.
         timeout_graceful_shutdown=5,
-        # Chrome Native Messaging inbound limit; this server-wide value is a
-        # protocol fact rather than a user-configurable WebSocket capacity.
-        ws_max_size=NM_MAX_INBOUND_BYTES,
+        # WebSocket max message size (64 MiB)
+        ws_max_size=64 * 1024 * 1024,
     )

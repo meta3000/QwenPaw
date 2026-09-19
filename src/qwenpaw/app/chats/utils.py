@@ -543,7 +543,7 @@ def agentscope_msg_to_message(
             continue
         role = msg.role or "assistant"
 
-        ts_value = msg.timestamp
+        ts_value = getattr(msg, "timestamp", None)
         if ts_value:
             ts_value = _normalize_msg_timestamp(ts_value, user_tz)
 

@@ -608,19 +608,6 @@ async def update_tool_config(
                 detail=f"Failed to save credential: {str(e)}",
             ) from e
 
-    if tool_name == "browser":
-        await run_sync_io(
-            _persist_browser_experimental,
-            persisted_config,
-        )
-        # Prefetch after an explicit settings save, not during app startup.
-        if persisted_config.get("experimental") is True:
-            from ...browser.runtime.managed_playwright import (
-                start_managed_chromium_download,
-            )
-
-            start_managed_chromium_download()
-
     # Hot reload config to apply changes without full restart
     schedule_agent_reload(request, workspace.agent_id)
 

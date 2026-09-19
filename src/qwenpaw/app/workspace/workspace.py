@@ -180,7 +180,6 @@ class Workspace:
         self._manager = None  # Reference to MultiAgentManager
         self._task_tracker = TaskTracker()
         self._app_services: Any = None
-        self._harness_runtime = None
 
         # Register all services
         self._register_services()
@@ -273,17 +272,8 @@ class Workspace:
 
     @property
     def harness_runtime(self):
-        """Return the lazily-created third-party agent runtime."""
-        if self._harness_runtime is None:
-            from ...harnesses import HarnessRuntime
-
-            self._harness_runtime = HarnessRuntime(
-                self.workspace_dir,
-                self.session,
-                self.agent_id,
-                self,
-            )
-        return self._harness_runtime
+        """Harness runtime has been removed."""
+        raise RuntimeError("Third-party agent harness has been removed from this build")
 
     def bootstrap_plugins(  # pylint: disable=too-many-branches
         self,
@@ -422,36 +412,10 @@ class Workspace:
         config = load_agent_config(self.agent_id)
         backend = config.backend
         if backend != "qwenpaw":
-            request_context = dict(
-                getattr(request, "request_context", None) or {},
+            raise RuntimeError(
+                f"Third-party backend '{backend}' is not supported in this build. "
+                "Only 'qwenpaw' backend is available."
             )
-            if request_context.get("source") == "portability_adaptation":
-                raise PermissionError(
-                    "PawPort compatibility workers require the qwenpaw "
-                    "backend",
-                )
-            settings = dict(getattr(config, "backend_settings", {}))
-            backend_controls = request_context.pop(
-                "backend_controls",
-                {},
-            )
-            if isinstance(backend_controls, dict):
-                settings.update(backend_controls)
-            settings["_request_context"] = {
-                **request_context,
-                "agent_id": self.agent_id,
-                "session_id": getattr(request, "session_id", None),
-                "user_id": getattr(request, "user_id", None),
-                "channel": getattr(request, "channel", None) or "console",
-            }
-            async for item in self.harness_runtime.stream(
-                backend=backend,
-                request=request,
-                cwd=self.workspace_dir.resolve(),
-                settings=settings,
-            ):
-                yield item
-            return
 
         from ...runtime import Runtime
 
@@ -845,10 +809,6 @@ class Workspace:
             final=final,
             preserve_reused=preserve_reused,
         )
-
-        if self._harness_runtime is not None:
-            await self._harness_runtime.stop()
-            self._harness_runtime = None
 
         self._started = False
         self._start_attempted = False

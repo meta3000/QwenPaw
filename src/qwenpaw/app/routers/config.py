@@ -42,10 +42,6 @@ from ..channels.conflict import (
     get_channel_bot_identity,
     get_channel_config,
 )
-from ..channels.qrcode_auth_handler import (
-    QRCODE_AUTH_HANDLERS,
-    generate_qrcode_image,
-)
 from ..channels.registry import BUILTIN_CHANNEL_KEYS
 from ..utils import schedule_agent_reload
 from .schemas_config import (
@@ -283,52 +279,6 @@ async def restart_channel(
             status_code=500,
             detail=(f"Failed to restart channel '{channel_name}': {exc}"),
         ) from exc
-
-
-# ── Unified QR code endpoints for all channels ─────────────────────────────
-
-
-@router.get(
-    "/channels/{channel}/qrcode",
-    summary="Get channel authorization QR code",
-    description=(
-        "Fetch a QR code image (base64 PNG) for the given channel. "
-        "Supported channels: " + ", ".join(QRCODE_AUTH_HANDLERS.keys())
-    ),
-)
-async def get_channel_qrcode(request: Request, channel: str) -> dict:
-    """Return {qrcode_img, poll_token} for the requested channel."""
-    handler = QRCODE_AUTH_HANDLERS.get(channel)
-    if handler is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"QR code not supported for channel: {channel}",
-        )
-
-    result = await handler.fetch_qrcode(request)
-    qrcode_img = generate_qrcode_image(result.scan_url)
-    return {"qrcode_img": qrcode_img, "poll_token": result.poll_token}
-
-
-@router.get(
-    "/channels/{channel}/qrcode/status",
-    summary="Poll channel QR code authorization status",
-)
-async def get_channel_qrcode_status(
-    request: Request,
-    channel: str,
-    token: str,
-) -> dict:
-    """Return {status, credentials} for the requested channel."""
-    handler = QRCODE_AUTH_HANDLERS.get(channel)
-    if handler is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"QR code not supported for channel: {channel}",
-        )
-
-    result = await handler.poll_status(token, request)
-    return {"status": result.status, "credentials": result.credentials}
 
 
 @router.get(

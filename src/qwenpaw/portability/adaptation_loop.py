@@ -15,11 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from ..agents.acp.meta import ACP_EPHEMERAL_META_KEY
-from ..agents.tools.agent_management import MAX_SPAWN_BATCH_CONCURRENCY
-from ..modes.mission import MissionMode
+
+# Maximum concurrent agent spawn operations
+MAX_SPAWN_BATCH_CONCURRENCY = 3
 from ..schemas import AgentRequest
 from ..utils.io_utils import run_sync_io
-from .adaptation_mission import prepare_mission, sync_mission
 from .adaptation_prompts import repair_prompt
 from .adaptation_staging import component_map, stage_local_assets
 from .compatibility import (
@@ -548,15 +548,9 @@ class ActiveAdaptationContext:
             }
 
 
-def _mission_mode(workspace: Any) -> MissionMode:
-    matches = [
-        mode
-        for mode in getattr(workspace.plugins, "modes", ())
-        if isinstance(mode, MissionMode)
-    ]
-    if len(matches) != 1:
-        raise RuntimeError("workspace does not have exactly one MissionMode")
-    return matches[0]
+def _mission_mode(workspace: Any) -> None:
+    """Mission mode removed."""
+    raise RuntimeError("Mission mode has been removed")
 
 
 def _iteration_budget(tool_budget: int) -> int:

@@ -1885,27 +1885,8 @@ class BaseChannel(ABC):
         """
 
     async def _finish_response_cycle(self, session_id: str) -> None:
-        """Run best-effort browser cleanup after one channel response cycle."""
-        if not session_id or self._workspace is None:
-            return
-        workspace_dir = getattr(self._workspace, "workspace_dir", None)
-        if workspace_dir is None:
-            return
-        try:
-            from ...browser.execution.kernel import get_default_kernel_manager
-            from ...browser.tool_entrypoint import derive_workspace_id
-
-            await get_default_kernel_manager().on_response_cycle_end(
-                derive_workspace_id(Path(workspace_dir)),
-                session_id,
-            )
-        # Intentional boundary: provider cleanup cannot fail a channel reply.
-        except Exception:
-            logger.warning(
-                "browser response-cycle cleanup failed for session=%s",
-                session_id[:30],
-                exc_info=True,
-            )
+        """Browser cleanup removed."""
+        pass
 
     @staticmethod
     def _clear_session_turn_usage(session_id: str) -> None:

@@ -31,7 +31,6 @@ from ...services.project_directory import (
     resolve_effective_project_dir,
     session_project_dir,
 )
-from ...checkpoints.runtime import RUNTIME as CHECKPOINT_RUNTIME
 
 logger = logging.getLogger(__name__)
 
@@ -442,14 +441,7 @@ async def batch_delete_chats(
     chats = {chat.id: chat for chat in await mgr.list_chats(archived=None)}
     deleted = await mgr.delete_chats(chat_ids=chat_ids)
     if deleted:
-        await CHECKPOINT_RUNTIME.delete_session_checkpoints(
-            workspace,
-            [
-                (chat.session_id, chat.user_id, chat.channel)
-                for chat_id in chat_ids
-                if (chat := chats.get(chat_id)) is not None
-            ],
-        )
+        pass  # checkpoints removed
     return {"deleted": deleted}
 
 
@@ -759,26 +751,7 @@ async def get_chat(
     )
     backend = workspace.config.backend
     context = ((state.get("agent") or {}).get("state") or {}).get("context")
-    if not context and backend != "qwenpaw":
-        try:
-            await workspace.harness_runtime.hydrate_session(
-                backend=backend,
-                session_id=chat_spec.session_id,
-                user_id=chat_spec.user_id,
-                channel=chat_spec.channel,
-                settings=dict(workspace.config.backend_settings),
-            )
-            state = await session.get_session_state_dict(
-                chat_spec.session_id,
-                chat_spec.user_id,
-                chat_spec.channel,
-            )
-        except Exception:
-            logger.debug(
-                "Third-party session recovery failed for %s",
-                chat_spec.session_id,
-                exc_info=True,
-            )
+    # Third-party backend session hydration removed
     status = await workspace.task_tracker.get_status(chat_id)
     if not state:
         return ChatHistory(messages=[], status=status)
@@ -865,10 +838,5 @@ async def delete_chat(
         raise HTTPException(
             status_code=404,
             detail=f"Chat not found: {chat_id}",
-        )
-    if chat is not None:
-        await CHECKPOINT_RUNTIME.delete_session_checkpoints(
-            workspace,
-            [(chat.session_id, chat.user_id, chat.channel)],
         )
     return {"deleted": True}

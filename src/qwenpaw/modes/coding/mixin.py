@@ -17,9 +17,6 @@ import logging
 from pathlib import Path
 
 from ...constant import WORKING_DIR
-from ...agents.tools import ast_tool
-from ...agents.tools._lsp_servers import detect_available_lsp_languages
-from ...agents.tools.lsp_tool import make_lsp_tool
 
 logger = logging.getLogger(__name__)
 
@@ -208,47 +205,7 @@ class CodingModeMixin:
         )
         result: list = []
 
-        try:
-            available = detect_available_lsp_languages(project_dir)
-            if available:
-                result.append(
-                    PolicyGuardedTool(
-                        make_lsp_tool(available),
-                        governor=governor,
-                        request_context=request_context,
-                    ),
-                )
-                logger.info(
-                    "Registered Coding Mode lsp tool with languages: %s",
-                    sorted(available.keys()),
-                )
-            else:
-                logger.info(
-                    "No LSP servers discovered for project_dir=%s; "
-                    "skipping lsp tool",
-                    project_dir,
-                )
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Failed to register lsp tool: {exc}")
-
-        try:
-            if ast_tool.is_ast_grep_available():
-                result.append(
-                    PolicyGuardedTool(
-                        ast_tool.ast_search,
-                        governor=governor,
-                        request_context=request_context,
-                    ),
-                )
-                logger.info("Registered Coding Mode ast_search tool")
-            else:
-                logger.info(
-                    "ast-grep CLI not found; skipping ast_search tool",
-                )
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Failed to register ast_search tool: {exc}")
-
-        return result
+        return []
 
 
 def collect_coding_tools(
@@ -275,37 +232,7 @@ def collect_coding_tools(
     )
     result: list = []
 
-    try:
-        available = detect_available_lsp_languages(project_dir)
-        if available:
-            result.append(
-                PolicyGuardedTool(
-                    make_lsp_tool(available),
-                    governor=governor,
-                    request_context=request_context,
-                ),
-            )
-            logger.info(
-                "Registered Coding Mode lsp tool with languages: %s",
-                sorted(available.keys()),
-            )
-    except Exception as exc:
-        logger.warning("Failed to register lsp tool: %s", exc)
-
-    try:
-        if ast_tool.is_ast_grep_available():
-            result.append(
-                PolicyGuardedTool(
-                    ast_tool.ast_search,
-                    governor=governor,
-                    request_context=request_context,
-                ),
-            )
-            logger.info("Registered Coding Mode ast_search tool")
-    except Exception as exc:
-        logger.warning("Failed to register ast_search tool: %s", exc)
-
-    return result
+    return []
 
 
 __all__ = [

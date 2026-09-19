@@ -49,78 +49,8 @@ from .get_current_time import get_current_time, set_user_timezone  # noqa: E402
 from .get_token_usage import get_token_usage  # noqa: E402
 from .run_tool_batch import run_tool_batch  # noqa: E402
 
-_BETA_NOTICE_LOGGED = False
-
-
-def _announce_experimental_browser() -> None:
-    """Make the unified-browser beta and its rollback path discoverable."""
-    global _BETA_NOTICE_LOGGED
-    if _BETA_NOTICE_LOGGED:
-        return
-    logger.info(
-        "Unified browser experimental beta is enabled (subprocess isolation; "
-        "OS sandboxing is planned). Set browser.experimental=false to use "
-        "the deprecated stable browser implementation.",
-    )
-    _BETA_NOTICE_LOGGED = True
-
-
-_BROWSER_EXPERIMENTAL = load_config().browser.experimental
-
-
-def browser_track_effective() -> bool:
-    """Return the browser track actually imported into this process."""
-    return _BROWSER_EXPERIMENTAL
-
-
-if _BROWSER_EXPERIMENTAL:
-    from .browser import browser
-
-    _announce_experimental_browser()
-else:
-    from .deprecated_browser.browser_control import browser
-
-
-_STABLE_BROWSER_MODULE = (
-    "qwenpaw.agents.tools.deprecated_browser.browser_control"
-)
-
-
-def _loaded_stable_browser():
-    """Return the stable browser module only when its track was imported."""
-    return sys.modules.get(_STABLE_BROWSER_MODULE)
-
-
-async def shutdown_browser_runtime() -> None:
-    """Stop the selected browser track without importing its alternative."""
-    stable = _loaded_stable_browser()
-    if stable is not None:
-        await stable.stop_all_browsers()
-    unified_links = sys.modules.get("qwenpaw.browser.runtime.links")
-    if unified_links is not None:
-        for link in unified_links.registered_links():
-            close_all = getattr(link, "close_all_sessions", None)
-            if close_all is not None:
-                await close_all()
-
-
-async def shutdown_browsers_for_workspace_dirs(dirs: list[str]) -> None:
-    """Stop selected-track browsers scoped to backup workspace directories."""
-    stable = _loaded_stable_browser()
-    if stable is not None:
-        await stable.stop_browsers_for_workspace_dirs(list(dirs))
-        return
-    from ...browser.execution.kernel import get_default_kernel_manager
-    from ...browser.tool_entrypoint import derive_workspace_id
-
-    manager = get_default_kernel_manager()
-    for workspace_dir in dirs:
-        await manager.close_workspace(derive_workspace_id(Path(workspace_dir)))
-
-
 # ``load_config()`` above may build ``ToolsConfig`` while this package is
-# still importing. Refresh the descriptor-derived cache after the selected
-# browser implementation has registered itself.
+# still importing. Refresh the descriptor-derived cache.
 _invalidate_builtin_tools_cache()
 
 

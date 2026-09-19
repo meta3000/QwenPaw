@@ -56,7 +56,6 @@ from ...agents.utils import (
     normalize_agent_language,
 )
 from ...agents.skill_system import SkillPoolService, get_workspace_skills_dir
-from ...harnesses.registry import ProviderCatalogItem, get_provider
 from ..agent_startup import AgentStartupStatus
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
@@ -313,18 +312,12 @@ _COPYABLE_MD_FILES = (
 
 def _get_available_third_party_provider(
     backend: str,
-) -> ProviderCatalogItem:
-    """Resolve an available third-party backend for API mutations."""
-    try:
-        provider = get_provider(backend)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if provider.coming_soon:
-        raise HTTPException(
-            status_code=409,
-            detail=f"{provider.name} is not available yet",
-        )
-    return provider
+) -> None:
+    """Third-party provider support has been removed."""
+    raise HTTPException(
+        status_code=400,
+        detail=f"Third-party backend '{backend}' is not supported in this build",
+    )
 
 
 def _get_multi_agent_manager(request: Request) -> MultiAgentManager:
@@ -464,12 +457,8 @@ async def list_agents(request: Request = None) -> AgentListResponse:
             if agent_config.backend == "qwenpaw":
                 backend_capabilities = {"workspace_ui": True}
             else:
-                try:
-                    backend_capabilities = get_provider(
-                        agent_config.backend,
-                    ).capabilities.model_dump()
-                except ValueError:
-                    backend_capabilities = {}
+                # Third-party backends not supported in this build
+                backend_capabilities = {}
 
             agents.append(
                 AgentSummary(

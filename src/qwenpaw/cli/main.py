@@ -65,26 +65,7 @@ class LazyGroup(click.Group):
         self.lazy_subcommands = lazy_subcommands or {}
 
     def parse_args(self, ctx, args):
-        """Treat the first positional path as a bare TUI project directory."""
-        args = list(args)
-        # Click 8.x exposes this parser; pyproject.toml pins Click below 9
-        # until a public replacement is available.
-        parser = self.make_parser(ctx)
-        _, remaining_args, _ = parser.parse_args(args=list(args))
-        # Group parsing stops at the first positional argument because
-        # allow_interspersed_args is False, so remaining_args is a suffix of
-        # the original argument list.
-        project_index = len(args) - len(remaining_args)
-        project = remaining_args[0] if remaining_args else None
-
-        # Registered commands win; otherwise the first positional path starts
-        # the TUI, even when global options appear before it.
-        if (
-            project is not None
-            and project not in self.list_commands(ctx)
-            and _looks_like_project_path(project)
-        ):
-            ctx.meta["tui_project"] = args.pop(project_index)
+        """Standard Click argument parsing."""
         return super().parse_args(ctx, args)
 
     def list_commands(self, ctx):
@@ -117,69 +98,12 @@ class LazyGroup(click.Group):
         return None
 
 
-def _looks_like_project_path(value: str) -> bool:
-    """Return True for path-like CLI tokens intended for ``qwenpaw`` TUI."""
-    if not value or value.startswith("-"):
-        return False
-    if value in {".", ".."}:
-        return True
-    if "/" in value or "\\" in value:
-        return True
-    return Path(value).expanduser().is_dir()
-
-
 @click.group(
     cls=LazyGroup,
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
     lazy_subcommands={
         "app": ("qwenpaw.cli.app_cmd", "app_cmd", ".app_cmd"),
-        "channels": (
-            "qwenpaw.cli.channels_cmd",
-            "channels_group",
-            ".channels_cmd",
-        ),
-        "channel": (
-            "qwenpaw.cli.channels_cmd",
-            "channels_group",
-            ".channels_cmd",
-        ),
-        "daemon": ("qwenpaw.cli.daemon_cmd", "daemon_group", ".daemon_cmd"),
-        "chats": ("qwenpaw.cli.chats_cmd", "chats_group", ".chats_cmd"),
-        "chat": ("qwenpaw.cli.chats_cmd", "chats_group", ".chats_cmd"),
-        "clean": ("qwenpaw.cli.clean_cmd", "clean_cmd", ".clean_cmd"),
-        "cron": ("qwenpaw.cli.cron_cmd", "cron_group", ".cron_cmd"),
-        "env": ("qwenpaw.cli.env_cmd", "env_group", ".env_cmd"),
-        "init": ("qwenpaw.cli.init_cmd", "init_cmd", ".init_cmd"),
-        "models": (
-            "qwenpaw.cli.providers_cmd",
-            "models_group",
-            ".providers_cmd",
-        ),
-        "skills": ("qwenpaw.cli.skills_cmd", "skills_group", ".skills_cmd"),
-        "tui": ("qwenpaw.cli.tui.launch", "tui_cmd", ".tui.launch"),
-        "uninstall": (
-            "qwenpaw.cli.uninstall_cmd",
-            "uninstall_cmd",
-            ".uninstall_cmd",
-        ),
-        "update": ("qwenpaw.cli.update_cmd", "update_cmd", ".update_cmd"),
-        "shutdown": (
-            "qwenpaw.cli.shutdown_cmd",
-            "shutdown_cmd",
-            ".shutdown_cmd",
-        ),
-        "auth": ("qwenpaw.cli.auth_cmd", "auth_group", ".auth_cmd"),
-        "agents": ("qwenpaw.cli.agents_cmd", "agents_group", ".agents_cmd"),
-        "agent": ("qwenpaw.cli.agents_cmd", "agents_group", ".agents_cmd"),
-        "plugin": (
-            "qwenpaw.cli.plugin_commands",
-            "plugin",
-            ".plugin_commands",
-        ),
-        "task": ("qwenpaw.cli.task_cmd", "task_cmd", ".task_cmd"),
-        "doctor": ("qwenpaw.cli.doctor_cmd", "doctor_cmd", ".doctor_cmd"),
-        "auto": ("qwenpaw.cli.auto", "auto_group", ".auto"),
     },
 )
 @click.version_option(version=__version__, prog_name="QwenPaw")
@@ -208,11 +132,6 @@ def cli(ctx: click.Context, host: str | None, port: int | None) -> None:
     ctx.obj["host"] = host
     ctx.obj["port"] = port
 
-    # Bare ``qwenpaw`` (no subcommand) opens the interactive terminal chat UI.
-    # ``--help`` is handled by Click before this callback runs, and every other
-    # entry point is an explicit subcommand, so this only fires for a bare
-    # invocation.
+    # Bare ``qwenpaw`` (no subcommand) shows help.
     if ctx.invoked_subcommand is None:
-        from .tui.launch import run_tui
-
-        run_tui(project=ctx.meta.get("tui_project"))
+        click.echo(ctx.get_help())

@@ -38,33 +38,6 @@ async def create_driver_service(
     from ...drivers.handlers.mcp import validate_mcp_endpoint
     from ...drivers.manager import DriverManager
     from ..approvals.driver_gate import QwenPawDriverApprovalGate
-    from ..mail.driver_config import (
-        is_managed_qwenpawmail_card,
-        sync_qwenpawmail_driver_card,
-    )
-
-    # Upgrade legacy qwenpawmail cards before DriverManager can launch them.
-    # ``load_agent_config`` has already hydrated the in-memory secrets from the
-    # encrypted store at this point.
-    mail = getattr(ws._config, "mail", None)
-    existing_mail_card = (
-        ws.workspace_dir / "drivers" / "mcp" / "qwenpawmail.yaml"
-    )
-    should_sync_mail_card = mail is not None or await asyncio.to_thread(
-        is_managed_qwenpawmail_card,
-        existing_mail_card,
-    )
-    if should_sync_mail_card and not await asyncio.to_thread(
-        sync_qwenpawmail_driver_card,
-        ws.workspace_dir,
-        mail,
-        getattr(ws._config, "backend", "qwenpaw"),
-    ):
-        logger.warning(
-            "qwenpawmail DriverCard could not be synchronized for agent %s; "
-            "mail capability remains disabled",
-            ws.agent_id,
-        )
 
     credential_store = AsyncCredentialStore(
         ws.workspace_dir / "credentials.yaml",
@@ -136,15 +109,9 @@ async def create_chat_service(
     # pylint: disable=protected-access
     from ..chats.manager import ChatManager
     from ..chats.repo.json_repo import JsonChatRepository
-    from ...browser.runtime.links import link_for
-    from ...browser.execution.kernel import get_default_kernel_manager
-    from ...browser.tool_entrypoint import derive_workspace_id
 
-    async def close_browser_session(session_id: str) -> None:
-        await get_default_kernel_manager().close_session(
-            derive_workspace_id(ws.workspace_dir),
-            session_id,
-        )
+    async def close_session(session_id: str) -> None:
+        pass  # browser removed
 
     if service is not None:
         cm = service
@@ -154,27 +121,11 @@ async def create_chat_service(
         chat_repo = JsonChatRepository(chats_path)
         cm = ChatManager(
             repo=chat_repo,
-            on_session_closed=close_browser_session,
+            on_session_closed=close_session,
         )
         publish(cm)
         logger.info(f"ChatManager created: {chats_path}")
-    cm.set_on_session_closed(close_browser_session)
-
-    async def live_session_ids() -> set[str]:
-        chats = await cm.list_chats(archived=False)
-        return {chat.session_id for chat in chats}
-
-    chrome_link = link_for("chrome")
-    register_resolver = getattr(
-        chrome_link,
-        "register_live_session_resolver",
-        None,
-    )
-    if register_resolver is not None:
-        register_resolver(
-            derive_workspace_id(ws.workspace_dir),
-            live_session_ids,
-        )
+    cm.set_on_session_closed(close_session)
     # pylint: enable=protected-access
 
 

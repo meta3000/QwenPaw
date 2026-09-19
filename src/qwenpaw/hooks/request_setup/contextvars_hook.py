@@ -162,19 +162,8 @@ class ContextVarsSetupHook(LifecycleHook):
         # and audit records resolve from it and must stay inside the agent.
         set_current_workspace_dir(workspace_dir)
 
-        # A running Mission pins the directories for the whole run. The pin
-        # lives in the on-disk loop config (it must survive process
-        # restarts); the snapshot is taken when the mission starts, so a
-        # mid-run session switch cannot move the worker. Reading it is
-        # filesystem I/O, so only the path is collected here and the read
-        # itself happens inside the worker thread below.
-        mission_loop_dir = None
-        mode_state = getattr(ctx, "mode_state", {}) or {}
-        mission_state = mode_state.get("mission", {})
-        if isinstance(mission_state, dict) and mission_state.get("active"):
-            loop_dir = mission_state.get("loop_dir")
-            if isinstance(loop_dir, str) and loop_dir:
-                mission_loop_dir = loop_dir
+        # A running Mission pins the directories for the whole run.
+        # Mission mode has been removed; no pinning needed.
 
         from ...utils.io_utils import run_sync_io
 
@@ -186,7 +175,6 @@ class ContextVarsSetupHook(LifecycleHook):
             request_context=(
                 request_context if isinstance(request_context, dict) else None
             ),
-            mission_loop_dir=mission_loop_dir,
         )
         if resolved is not None:
             # Set on the event loop, never inside the worker thread:
@@ -247,7 +235,6 @@ def _resolve_turn_project_dirs(
     agent_project_dir: str | None,
     session_project_dirs: Optional[list],
     request_context: Optional[dict],
-    mission_loop_dir: str | None,
 ) -> Optional[_ResolvedTurn]:
     """Resolve this turn's project directories in one blocking pass.
 
@@ -300,26 +287,12 @@ def _resolve_turn_project_dirs(
             else:
                 session_project_dirs = _pending_project_dirs(request_context)
 
-    mode_override = None
-    if mission_loop_dir:
-        from ...modes.mission.state import read_loop_config
-
-        mission_config = read_loop_config(Path(mission_loop_dir))
-        pinned = mission_config.get("source_project_dirs")
-        if isinstance(pinned, list) and pinned:
-            mode_override = pinned
-        else:
-            value = mission_config.get("source_project_dir")
-            if isinstance(value, str) and value:
-                mode_override = [value]
-
     try:
         resolved = resolve_effective_project_dirs(
             workspace_dir,
             agent_project_dir=agent_project_dir,
             session_project_dirs=session_project_dirs,
             request_override=request_override,
-            mode_override=mode_override,
             fork_project_dir=str(fork_dir) if fork_dir else None,
         )
     except ValueError:

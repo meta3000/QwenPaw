@@ -749,17 +749,6 @@ class AgentBuilder:
         )
         if isinstance(_payload_ctx, dict):
             rc.update(_payload_ctx)
-        mode_state = getattr(ctx, "mode_state", {}) or {}
-        mission_state = mode_state.get("mission", {})
-        if isinstance(mission_state, dict) and mission_state.get("active"):
-            loop_dir = mission_state.get("loop_dir")
-            if isinstance(loop_dir, str) and loop_dir:
-                from ..modes.mission.state import read_loop_config
-
-                mission_config = read_loop_config(Path(loop_dir))
-                source_project = mission_config.get("source_project_dir")
-                if isinstance(source_project, str) and source_project:
-                    rc["active_mode_project_dir"] = source_project
         return rc
 
     @staticmethod

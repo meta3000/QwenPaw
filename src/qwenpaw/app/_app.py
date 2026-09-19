@@ -17,8 +17,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..__version__ import __version__
-from ..backup import BackupManager
-from ..backup._utils.safe_swap import cleanup_startup_restore_artifacts
 from ..config import load_config  # pylint: disable=no-name-in-module
 from ..config.utils import get_config_path, read_last_api
 from ..constant import (
@@ -87,47 +85,6 @@ async def _sync_scroll_history_on_startup() -> None:
         logger.warning("session-sync: import/launch failed", exc_info=True)
 
 
-async def _browser_idle_watchdog(kernel: Any, interval: float) -> None:
-    """Periodically reclaim idle browser workers for this app process."""
-    while True:
-        await asyncio.sleep(interval)
-        try:
-            await kernel.discard_idle_workers()
-            await kernel.sweep_idle_sessions()
-            await kernel.sweep_wire_spill()
-        # intentional boundary: watchdog failures must not kill the app.
-        except Exception:
-            logger.warning("Browser idle watchdog failed", exc_info=True)
-
-
-def _start_browser_runtime(app: FastAPI, kernel: Any, interval: float) -> None:
-    """Attach browser worker housekeeping to this app's lifespan."""
-    app.state.browser_kernel = kernel
-    app.state.browser_watchdog = asyncio.create_task(
-        _browser_idle_watchdog(kernel, interval),
-    )
-
-
-async def _stop_browser_runtime(app: FastAPI) -> None:
-    """Cancel browser housekeeping and reclaim all browser workers."""
-    browser_watchdog = getattr(app.state, "browser_watchdog", None)
-    if browser_watchdog is not None:
-        browser_watchdog.cancel()
-        with suppress(asyncio.CancelledError):
-            await browser_watchdog
-    browser_kernel = getattr(app.state, "browser_kernel", None)
-    if browser_kernel is not None:
-        try:
-            await browser_kernel.discard_all_workers()
-        except Exception:
-            logger.error("Error shutting down browser workers", exc_info=True)
-    from ..browser.runtime.managed_playwright import (
-        stop_managed_chromium_download,
-    )
-
-    await stop_managed_chromium_download()
-
-
 @asynccontextmanager
 async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     app: FastAPI,
@@ -139,18 +96,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     # Fast synchronous setup (target < 100ms)
     # Everything here must be lightweight so the server starts quickly.
     # ================================================================
-
-    try:
-        cleanup_startup_restore_artifacts()
-    except Exception as exc:
-        message = (
-            "QwenPaw startup failed because restore artifact cleanup did not "
-            "complete. Another restore or cleanup may still be running, or "
-            "a previous restore may need recovery before startup can safely "
-            "read restored files."
-        )
-        logger.error(message, exc_info=True)
-        raise RuntimeError(f"{message} Original error: {exc}") from exc
 
     auto_register_from_env()
     check_proxy_config_sanity()
@@ -179,17 +124,9 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     ensure_qa_agent_exists()
 
     from ..config.utils import get_agent_dirs
-    from ..portability.transaction_journal import recover_import_transactions
 
-    try:
-        recovered_transactions = await recover_import_transactions(
-            get_agent_dirs(),
-        )
-    except Exception:
-        logger.exception(
-            "PawPort transaction recovery failed; continuing startup",
-        )
-        recovered_transactions = []
+    # Portability transaction recovery removed
+    recovered_transactions = []
     if recovered_transactions:
         logger.warning(
             "Recovered %d interrupted PawPort import transaction(s)",
@@ -326,8 +263,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             exc_info=True,
         )
 
-    backup_manager = BackupManager()
-
     # Start token usage manager background tasks
     logger.debug("Starting TokenUsageManager background tasks...")
     from ..token_usage import get_token_usage_manager
@@ -341,7 +276,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     app.state.multi_agent_manager = workspace_registry
     app.state.provider_manager = provider_manager
     app.state.local_model_manager = local_model_manager
-    app.state.backup_manager = backup_manager
     app.state.plugin_loader = None
     app.state.plugin_registry = None
 
@@ -356,20 +290,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
 
     app.state.startup_ready = asyncio.Event()
     app.state.startup_time = startup_start_time
-    from ..browser.execution.kernel import get_default_kernel_manager
-
-    browser_config = load_config(get_config_path()).browser
-    _start_browser_runtime(
-        app,
-        get_default_kernel_manager(),
-        max(0.1, browser_config.idle_ttl_seconds),
-    )
-    try:
-        from ..browser.control_link.chrome.ws_handler import prime_bridge_token
-
-        prime_bridge_token()
-    except Exception:
-        logger.warning("Bridge token priming failed", exc_info=True)
 
     fast_elapsed = time.time() - startup_start_time
     logger.info(
@@ -601,19 +521,7 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             with suppress(asyncio.CancelledError):
                 await _bg_task
 
-        # Import jobs can write workspaces and install plugins. Stop them
-        # before closing the services they depend on.
-        from .routers.portability_imports import PORTABILITY_IMPORT_JOBS
-
-        await PORTABILITY_IMPORT_JOBS.shutdown()
-
-        logger.info("Stopping BackupManager...")
-        await backup_manager.shutdown()
-
-        await _stop_browser_runtime(app)
-        from ..agents.tools import shutdown_browser_runtime
-
-        await shutdown_browser_runtime()
+        # Import jobs removed
 
         # ==================== Execute Shutdown Hooks ====================
         plugin_registry = getattr(app.state, "plugin_registry", None)
@@ -675,8 +583,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
                 await multi_agent_mgr.stop_all()
             except Exception as e:
                 logger.error(f"Error stopping MultiAgentManager: {e}")
-
-        await PORTABILITY_IMPORT_JOBS.drain()
 
         # These three cleanup tasks are independent; run in parallel.
         from ..agents.skill_system.hub import aclose_hub_client
@@ -835,26 +741,6 @@ def get_doctor_runtime():
 
 
 app.include_router(api_router, prefix="/api")
-
-# These registrations require the fully constructed application instance.
-# pylint: disable-next=wrong-import-position,wrong-import-order
-from qwenpaw.browser.control_link import (  # noqa: E402
-    register_builtin_control_links,
-)
-
-# pylint: disable-next=wrong-import-position,wrong-import-order
-from qwenpaw.browser.control_link.chrome.ws_handler import (  # noqa: E402
-    ws_router as browser_chrome_ws_router,
-)
-
-# pylint: disable-next=wrong-import-position,wrong-import-order
-from qwenpaw.browser.control_link.chrome.observe import (  # noqa: E402
-    status_router as browser_chrome_status_router,
-)
-
-app.include_router(browser_chrome_ws_router, prefix="/api")
-app.include_router(browser_chrome_status_router, prefix="/api")
-register_builtin_control_links()
 
 app.include_router(healthz_router, prefix="/api")
 
