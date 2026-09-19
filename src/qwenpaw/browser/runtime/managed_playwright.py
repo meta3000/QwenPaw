@@ -22,7 +22,8 @@ import time
 from pathlib import Path
 
 from ...constant import WORKING_DIR
-from ...tauri.env import DESKTOP_MANAGED_PLAYWRIGHT_ENV
+
+DESKTOP_MANAGED_PLAYWRIGHT_ENV = "QWENPAW_DESKTOP_MANAGED_PLAYWRIGHT"
 
 logger = logging.getLogger(__name__)
 

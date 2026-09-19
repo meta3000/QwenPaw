@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from qwenpawmail_mcp.providers import ENTERPRISE_PROVIDERS
+
+try:
+    from qwenpawmail_mcp.providers import ENTERPRISE_PROVIDERS
+except ImportError:
+    ENTERPRISE_PROVIDERS = []
 
 from ...config.config import (
     AGENT_MAIL_CREDENTIAL_REF,

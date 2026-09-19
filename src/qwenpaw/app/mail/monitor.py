@@ -37,18 +37,28 @@ from email.utils import parseaddr
 from pathlib import Path
 from typing import Any, Optional
 
-from qwenpawmail_mcp.imap_ops import (
-    check_response as check_imap_response,
-    encode_folder,
-    move_message as move_message_on_connection,
-)
-from qwenpawmail_mcp.providers import (
-    ENTERPRISE_PROVIDERS,
-    PROVIDERS,
-    ProviderCapabilities,
-    provider_for_email,
-    provider_for_imap_host,
-)
+try:
+    from qwenpawmail_mcp.imap_ops import (
+        check_response as check_imap_response,
+        encode_folder,
+        move_message as move_message_on_connection,
+    )
+    from qwenpawmail_mcp.providers import (
+        ENTERPRISE_PROVIDERS,
+        PROVIDERS,
+        ProviderCapabilities,
+        provider_for_email,
+        provider_for_imap_host,
+    )
+except ImportError:
+    check_imap_response = None
+    encode_folder = None
+    move_message_on_connection = None
+    ENTERPRISE_PROVIDERS = []
+    PROVIDERS = []
+    ProviderCapabilities = None
+    provider_for_email = None
+    provider_for_imap_host = None
 
 from ...config.config import (
     AgentMailConfig,
