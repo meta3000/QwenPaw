@@ -189,67 +189,6 @@ async def create_channel_service(
     # pylint: enable=protected-access
 
 
-async def create_mail_monitor_service(
-    ws: "Workspace",
-    _,
-    publish: Callable[[Any], None],
-):
-    """Create the mail push monitor when enabled for this agent.
-
-    Started only when the agent has a personal mailbox with credentials
-    and ``mail.push.mode != "off"``.  Dedicated new mailboxes
-    (is_new_account=True, no auth_code yet) never start the monitor.
-
-    Args:
-        ws: Workspace instance
-        _: Unused service parameter
-
-    Returns:
-        MailMonitorService instance or None if not enabled
-    """
-    # pylint: disable=protected-access
-    # Mail push is only supported for the qwenpaw backend: third-party
-    # harness runtimes cannot handle the dict wake requests built by the
-    # monitor and would fail on every incoming email.
-    if getattr(ws._config, "backend", "qwenpaw") != "qwenpaw":
-        return None
-    mail = getattr(ws._config, "mail", None)
-    if mail is None or mail.push is None or mail.push.mode == "off":
-        return None
-    if mail.is_new_account:
-        return None
-    credential = mail.credential
-    if not credential.name or not credential.auth_code:
-        return None
-
-    from ..mail.monitor import MailMonitorService
-    from ...agents.utils import ensure_workspace_md_file
-
-    # The mail wake prompt asks the agent to read CONTACTS.md and
-    # MAIL_TRIAGE.md first thing, so make sure both seed files exist
-    # for workspaces created before these templates were introduced
-    # (agent CRUD APIs are the only other distribution path).
-    language = getattr(ws._config, "language", None)
-    if not language:
-        try:
-            from ...config import load_config as _load_root_config
-
-            language = _load_root_config().agents.language
-        except Exception:  # pragma: no cover - config load best-effort
-            language = None
-    for seed_name in ("CONTACTS.md", "MAIL_TRIAGE.md"):
-        ensure_workspace_md_file(ws.workspace_dir, language or "en", seed_name)
-
-    monitor = MailMonitorService(
-        agent_id=ws.agent_id,
-        workspace=ws,
-        mail_config=mail,
-    )
-    publish(monitor)
-    return monitor
-    # pylint: enable=protected-access
-
-
 async def create_agent_config_watcher(
     ws: "Workspace",
     _,

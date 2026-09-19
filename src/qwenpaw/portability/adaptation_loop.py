@@ -14,8 +14,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..agents.acp.meta import ACP_EPHEMERAL_META_KEY
-
 # Maximum concurrent agent spawn operations
 MAX_SPAWN_BATCH_CONCURRENCY = 3
 from ..schemas import AgentRequest
@@ -589,7 +587,6 @@ async def _run_phase(
                 "max_react_iterations": _iteration_budget(
                     asset.tool_budget - asset.tool_calls,
                 ),
-                ACP_EPHEMERAL_META_KEY: True,
                 "approval_level": "off",
                 "subagent_allowed_tools": list(tools),
                 "subagent_skills": [],

@@ -42,8 +42,6 @@ def ensure_workspace_md_file(
     try:
         if filename == "CONTACTS.md":
             safe_filename = "CONTACTS.md"
-        elif filename == "MAIL_TRIAGE.md":
-            safe_filename = "MAIL_TRIAGE.md"
         else:
             log_filename = str(filename).replace("\r", "").replace("\n", "")
             logger.warning(

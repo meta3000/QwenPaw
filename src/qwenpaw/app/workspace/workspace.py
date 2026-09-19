@@ -36,7 +36,6 @@ from .service_factories import (
     create_chat_service,
     create_channel_service,
     create_agent_config_watcher,
-    create_mail_monitor_service,
 )
 from .local_workspace import QwenPawLocalWorkspace
 from ..task_tracker import TaskTracker
@@ -220,12 +219,6 @@ class Workspace:
         """Get cron manager instance from ServiceManager."""
         return self._service_manager.services.get("cron_manager")
 
-    @property
-    def mail_monitor(self):
-        """Get mail push monitor instance from ServiceManager."""
-        return self._service_manager.services.get("mail_monitor")
-
-    # Non-service state
     @property
     def task_tracker(self) -> TaskTracker:
         """Get task tracker for background chat and reconnect."""
@@ -574,20 +567,6 @@ class Workspace:
                 stop_method="stop",
                 priority=40,
                 concurrent_init=False,
-            ),
-        )
-
-        # Priority 45: Mail push monitor (conditional: mail.push enabled)
-        sm.register(
-            ServiceDescriptor(
-                name="mail_monitor",
-                service_class=None,
-                post_init=create_mail_monitor_service,
-                start_method="start",
-                stop_method="stop",
-                priority=45,
-                concurrent_init=False,
-                require_clean_stop=True,
             ),
         )
 

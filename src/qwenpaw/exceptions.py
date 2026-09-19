@@ -477,37 +477,6 @@ class QQApiError(ChannelError):
         )
 
 
-# ==================== ACP Exceptions ====================
-
-
-class ACPError(ExternalServiceException):
-    """Base for Agent Communication Protocol errors."""
-
-    def __init__(self, message: str, *, agent: Optional[str] = None) -> None:
-        self.agent = agent
-        super().__init__(
-            service_name="acp",
-            message=message,
-            details={"agent": agent} if agent else None,
-        )
-
-
-class ACPConfigurationError(ACPError):
-    """ACP configuration is missing or invalid."""
-
-
-class ACPTransportError(ACPError):
-    """ACP transport-level failure (network, connection)."""
-
-
-class ACPProtocolError(ACPError):
-    """ACP protocol violation (malformed message, unexpected state)."""
-
-
-class ACPSessionError(ACPError):
-    """ACP session error (not found, expired, invalid state)."""
-
-
 # ==================== Backup Exceptions ====================
 
 

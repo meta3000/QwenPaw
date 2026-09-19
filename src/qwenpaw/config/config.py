@@ -146,71 +146,6 @@ class ActiveModelsInfo(BaseModel):
     effective_max_input_length: int | None = None
 
 
-class ACPAgentConfig(BaseModel):
-    """Configuration for one ACP agent."""
-
-    enabled: bool = False
-    command: str = ""
-    args: list[str] = Field(default_factory=list)
-    env: Dict[str, str] = Field(default_factory=dict)
-    trusted: bool = True
-    tool_parse_mode: str = "call_title"
-    stdio_buffer_limit_bytes: int = Field(
-        default=50 * 1024 * 1024,
-        gt=0,
-    )
-
-
-def _get_default_acp_agents() -> Dict[str, ACPAgentConfig]:
-    """Get default ACP agents configuration."""
-    return {
-        "opencode": ACPAgentConfig(
-            enabled=True,
-            command="opencode",
-            args=["acp"],
-            trusted=True,
-            tool_parse_mode="update_detail",
-        ),
-        "qwen_code": ACPAgentConfig(
-            enabled=True,
-            command="qwen",
-            args=["--acp"],
-            trusted=True,
-            tool_parse_mode="call_detail",
-        ),
-        "claude_code": ACPAgentConfig(
-            enabled=True,
-            command="npx",
-            args=["-y", "@zed-industries/claude-agent-acp"],
-            trusted=True,
-            tool_parse_mode="update_detail",
-        ),
-        "codex": ACPAgentConfig(
-            enabled=True,
-            command="npx",
-            args=["-y", "@zed-industries/codex-acp"],
-            trusted=True,
-            tool_parse_mode="call_detail",
-        ),
-    }
-
-
-class ACPConfig(BaseModel):
-    """ACP (Agent Communication Protocol) configuration."""
-
-    node_path: str = ""
-    agents: Dict[str, ACPAgentConfig] = Field(
-        default_factory=_get_default_acp_agents,
-    )
-
-    @model_validator(mode="after")
-    def _merge_default_agents(self):
-        """Merge default agents with user-configured agents."""
-        for name, agent_cfg in _get_default_acp_agents().items():
-            if name not in self.agents:
-                self.agents[name] = agent_cfg
-        return self
-
 
 # Agent ID validation: alphanumeric, hyphens, underscores.
 _AGENT_ID_PATTERN = re.compile(
@@ -2024,195 +1959,6 @@ class FallbackPolicyConfig(BaseModel):
     )
 
 
-class AgentMailCredential(BaseModel):
-    """Credential for an agent-managed mailbox account.
-
-    Secret values exist on the in-memory model because the mail monitor and
-    agent-edit flow consume them, but Pydantic must never serialize them.
-    Persistence stores those values in the workspace credential store and
-    hydrates them again when ``agent.json`` is loaded.
-    """
-
-    name: str = Field(
-        default="",
-        description="Mailbox account name",
-    )
-    domain: str = Field(
-        default="163.com",
-        description="Mail domain suffix",
-    )
-    auth_code: str = Field(
-        default="",
-        description=(
-            "Provider credential: authorization code, app password, or "
-            "mailbox login password"
-        ),
-        exclude=True,
-        repr=False,
-    )
-    password: str = Field(
-        default="",
-        description="Legacy registration field retained for migration only",
-        exclude=True,
-        repr=False,
-    )
-    phone_number: str = Field(
-        default="",
-        description="Legacy registration field retained for migration only",
-        exclude=True,
-        repr=False,
-    )
-    provider: str = Field(
-        default="",
-        description=(
-            "Mail service provider for enterprise mailboxes with a "
-            "custom domain. Empty string means auto-detect by domain. "
-            "Allowed values: '', 'tencent_exmail', 'aliyun_qiye', "
-            "'netease_qiye'."
-        ),
-    )
-
-
-class AgentMailPushRule(BaseModel):
-    """One deterministic rule applied to each incoming email."""
-
-    # "subject" is a legacy alias of "content" (subject + body).
-    field: Literal["from", "subject", "content", "keyword"] = "from"
-    contains: str = ""
-    action: Literal["mark_read", "move", "notify", "wake_agent"] = "notify"
-    param: str = ""
-
-
-class AgentMailPushConfig(BaseModel):
-    """Realtime mail push (IMAP IDLE) monitoring configuration."""
-
-    mode: Literal[
-        "off",
-        "rules_only",
-        "rules_then_agent",
-        "agent_all",
-    ] = "off"
-    rules: list[AgentMailPushRule] = Field(default_factory=list)
-    poll_interval_seconds: int = 120
-    access_control_enabled: bool = False
-
-
-class AgentMailConfig(BaseModel):
-    """Mailbox management configuration.
-
-    Public mailbox metadata and push rules are stored in ``agent.json``;
-    credential secrets are stored separately in encrypted form.
-    """
-
-    is_new_account: bool = Field(
-        default=False,
-        description=(
-            "True = dedicated mailbox registration pending; supplying the "
-            "mail credential completes registration and changes it to False"
-        ),
-    )
-    credential: AgentMailCredential = Field(
-        default_factory=AgentMailCredential,
-        description="Mailbox account credential",
-    )
-    push: Optional[AgentMailPushConfig] = Field(
-        default=None,
-        description="Realtime push monitoring config (None = disabled)",
-    )
-
-
-AGENT_MAIL_CREDENTIAL_REF = "mail/qwenpawmail"
-AGENT_MAIL_SECRET_FIELDS = ("auth_code", "password", "phone_number")
-
-
-def _agent_mail_credential_store(workspace_dir: Path):
-    """Return the existing per-workspace encrypted credential store."""
-    from ..drivers.credentials.store import AsyncCredentialStore
-
-    return AsyncCredentialStore(workspace_dir / "credentials.yaml")
-
-
-def _agent_mail_public_identity(mail: AgentMailConfig) -> dict[str, object]:
-    credential = mail.credential
-    return {
-        "is_new_account": mail.is_new_account,
-        "name": (credential.name or "").strip().lower(),
-        "domain": (credential.domain or "").strip().lower(),
-        "provider": (credential.provider or "").strip().lower(),
-    }
-
-
-def save_agent_mail_credentials(
-    workspace_dir: Path,
-    mail: AgentMailConfig | None,
-) -> None:
-    """Persist mailbox secrets outside ``agent.json``.
-
-    Empty values are not stored.  Removing mail configuration also removes the
-    managed credential record so a stale DriverCard fails closed.
-    """
-    store = _agent_mail_credential_store(workspace_dir)
-    if mail is None:
-        store.delete_sync(AGENT_MAIL_CREDENTIAL_REF)
-        return
-
-    secrets = {
-        field_name: value
-        for field_name in AGENT_MAIL_SECRET_FIELDS
-        if (value := getattr(mail.credential, field_name, ""))
-    }
-    if not secrets:
-        # A non-null mail config with blank in-memory values commonly means a
-        # decryption/keychain problem or a redacted edit payload.  Preserve the
-        # encrypted record; explicit mail removal above is the only revocation
-        # operation.
-        return
-
-    from ..drivers.credentials.types import CredentialRecord
-
-    store.put_sync(
-        CredentialRecord(
-            ref=AGENT_MAIL_CREDENTIAL_REF,
-            kind="static",
-            public=_agent_mail_public_identity(mail),
-            secrets=secrets,
-            meta={"managed_by": "agent_mail"},
-        ),
-    )
-
-
-def hydrate_agent_mail_credentials(
-    workspace_dir: Path,
-    mail: AgentMailConfig | None,
-) -> AgentMailConfig | None:
-    """Hydrate the in-memory mail model from the encrypted store."""
-    if mail is None:
-        return None
-
-    from ..drivers.errors import CredentialNotFoundError
-    from ..security.secret_store import is_encrypted
-
-    try:
-        record = _agent_mail_credential_store(workspace_dir).get_sync(
-            AGENT_MAIL_CREDENTIAL_REF,
-        )
-    except CredentialNotFoundError:
-        return mail
-
-    if record.public and record.public != _agent_mail_public_identity(mail):
-        # Never apply a credential to a different mailbox after somebody
-        # manually edits only the public fields in agent.json.
-        return mail
-
-    for field_name in AGENT_MAIL_SECRET_FIELDS:
-        value = record.secrets.get(field_name)
-        # ``decrypt`` deliberately returns an ENC token when the master key is
-        # unavailable.  Do not pass that ciphertext to IMAP/SMTP as though it
-        # were a real credential.
-        if isinstance(value, str) and not is_encrypted(value):
-            setattr(mail.credential, field_name, value)
-    return mail
-
 
 class AgentProfileConfig(BaseModel):
     """Complete Agent Profile configuration (stored in workspace/agent.json).
@@ -2334,10 +2080,6 @@ class AgentProfileConfig(BaseModel):
         default=None,
         description="Security configuration for this agent",
     )
-    acp: Optional[ACPConfig] = Field(
-        default=None,
-        description="ACP configuration for this agent",
-    )
     plan: PlanConfig = Field(
         default_factory=PlanConfig,
         description="Plan mode configuration for this agent",
@@ -2345,10 +2087,6 @@ class AgentProfileConfig(BaseModel):
     coding_mode: CodingModeConfig = Field(
         default_factory=CodingModeConfig,
         description="Coding Mode configuration for this agent",
-    )
-    mail: Optional[AgentMailConfig] = Field(
-        default=None,
-        description="Mailbox management configuration",
     )
 
 
@@ -3123,7 +2861,6 @@ class Config(BaseModel):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     last_dispatch: Optional[LastDispatchConfig] = None
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    acp: ACPConfig = Field(default_factory=ACPConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     show_tool_details: bool = True
     user_timezone: str = Field(
@@ -3221,7 +2958,6 @@ def build_fallback_agent_profile_config(
             and config.agents.system_prompt_files
             else ["AGENTS.md", "SOUL.md", "PROFILE.md"]
         ),
-        acp=(config.acp if hasattr(config, "acp") and config.acp else None),
     )
 
 
@@ -3346,54 +3082,6 @@ def migrate_project_directory_config(data: object) -> bool:
     return True
 
 
-def migrate_agent_mail_credentials(
-    data: object,
-    workspace_dir: Path,
-) -> bool:
-    """Move legacy plaintext mailbox secrets into ``credentials.yaml``.
-
-    The encrypted record is written before the caller removes the plaintext
-    fields from ``agent.json``.  A credential-store failure therefore leaves
-    the legacy file untouched instead of losing the only usable copy.
-    """
-    if not isinstance(data, dict):
-        return False
-    mail_data = data.get("mail")
-    if not isinstance(mail_data, dict):
-        return False
-    credential_data = mail_data.get("credential")
-    if not isinstance(credential_data, dict):
-        return False
-
-    present_fields = {
-        field_name
-        for field_name in AGENT_MAIL_SECRET_FIELDS
-        if field_name in credential_data
-    }
-    if not present_fields:
-        return False
-
-    incoming_mail = AgentMailConfig.model_validate(mail_data)
-    incoming_values = {
-        field_name: getattr(incoming_mail.credential, field_name)
-        for field_name in present_fields
-    }
-
-    # A manually edited legacy file may contain only the one changed secret.
-    # Hydrate the other fields first, then let explicitly present values win.
-    merged_mail = incoming_mail.model_copy(deep=True)
-    for field_name in AGENT_MAIL_SECRET_FIELDS:
-        setattr(merged_mail.credential, field_name, "")
-    hydrate_agent_mail_credentials(workspace_dir, merged_mail)
-    for field_name, value in incoming_values.items():
-        setattr(merged_mail.credential, field_name, value)
-
-    save_agent_mail_credentials(workspace_dir, merged_mail)
-    for field_name in present_fields:
-        credential_data.pop(field_name, None)
-    return True
-
-
 def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
     agent_id: str,
 ) -> AgentProfileConfig:
@@ -3488,10 +3176,6 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
         last_dispatch_migrated = False
         last_dispatch_migration_failed = False
         migration_write_failed = False
-        mail_credentials_migrated = migrate_agent_mail_credentials(
-            data,
-            workspace_dir,
-        )
         if "last_dispatch" in data:
             try:
                 _migrate_last_dispatch_state(
@@ -3530,7 +3214,6 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
 
         migrations_applied = (
             project_dir_migrated,
-            mail_credentials_migrated,
             weixin_migrated,
             display_migrated,
             access_control_migrated,
@@ -3543,9 +3226,7 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
                     content_digest,
                     agent_id,
                 )
-                if not mail_credentials_migrated and (
-                    project_dir_migrated or weixin_migrated or display_migrated
-                ):
+                if project_dir_migrated or weixin_migrated or display_migrated:
                     import uuid as _uuid
                     import shutil as _shutil
 
@@ -3599,7 +3280,6 @@ def load_agent_config(  # pylint: disable=too-many-branches,too-many-statements
         _sanitize_loop_config(data, agent_id)
 
         agent_config = AgentProfileConfig(**data)
-        hydrate_agent_mail_credentials(workspace_dir, agent_config.mail)
         agent_config.record_source_digest(content_digest)
 
         if migration_write_failed or last_dispatch_migration_failed:
@@ -3645,11 +3325,6 @@ def save_agent_config(  # pylint: disable=too-many-branches,too-many-statements
     agent_config_path = workspace_dir / "agent.json"
     candidate = agent_config.model_copy(deep=True)
     with _agent_config_lock:
-        from ..drivers.errors import CredentialNotFoundError
-
-        credential_store = None
-        previous_mail_credential = None
-        mail_credential_updated = False
         try:
             source_digest = candidate.source_digest()
             if source_digest is not None:
@@ -3658,37 +3333,6 @@ def save_agent_config(  # pylint: disable=too-many-branches,too-many-statements
                     source_digest,
                     agent_id,
                 )
-
-            cached_entry = _agent_config_cache.get(agent_id)
-            had_mail = bool(
-                isinstance(cached_entry, _AgentConfigCacheEntry)
-                and cached_entry.config.mail is not None,
-            )
-            if (
-                not had_mail
-                and not isinstance(cached_entry, _AgentConfigCacheEntry)
-                and agent_config_path.is_file()
-            ):
-                try:
-                    persisted = json.loads(
-                        agent_config_path.read_text(encoding="utf-8"),
-                    )
-                    had_mail = isinstance(persisted, dict) and (
-                        persisted.get("mail") is not None
-                    )
-                except (OSError, json.JSONDecodeError):
-                    pass
-
-            if candidate.mail is not None or had_mail:
-                credential_store = _agent_mail_credential_store(workspace_dir)
-                try:
-                    previous_mail_credential = credential_store.get_sync(
-                        AGENT_MAIL_CREDENTIAL_REF,
-                    )
-                except CredentialNotFoundError:
-                    previous_mail_credential = None
-                save_agent_mail_credentials(workspace_dir, candidate.mail)
-                mail_credential_updated = True
 
             payload = candidate.model_dump(exclude_none=True)
             saved_digest = _json_payload_digest(payload)
@@ -3707,22 +3351,6 @@ def save_agent_config(  # pylint: disable=too-many-branches,too-many-statements
                     fingerprint=saved_fingerprint,
                 )
         except Exception:
-            # Keep the public agent config and its referenced credential on the
-            # same logical version when JSON publication fails.
-            if credential_store is not None and mail_credential_updated:
-                try:
-                    if previous_mail_credential is None:
-                        credential_store.delete_sync(
-                            AGENT_MAIL_CREDENTIAL_REF,
-                        )
-                    else:
-                        credential_store.put_sync(previous_mail_credential)
-                except Exception:  # pylint: disable=broad-except
-                    logger.exception(
-                        "Failed to restore mail credential after agent config "
-                        "write failure for %s",
-                        sanitize_log_value(agent_id),
-                    )
             _agent_config_cache.pop(agent_id, None)
             raise
 

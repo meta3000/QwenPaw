@@ -256,9 +256,6 @@ MODEL_PROVIDER_CHECK_TIMEOUT = EnvVarLoader.get_float(
     allow_inf=False,
 )
 
-# Playwright: use system Chromium when set (e.g. in Docker).
-PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH_ENV = "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"
-
 # When True, expose /docs, /redoc, /openapi.json
 # (dev only; keep False in prod).
 DOCS_ENABLED = EnvVarLoader.get_bool("QWENPAW_OPENAPI_DOCS", False)

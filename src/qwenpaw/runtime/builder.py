@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable
 
-from ..agents.acp.meta import ACP_PROJECT_DIR_META_KEY
 from ..utils.io_utils import run_sync_io
 from ..utils.logging import sanitize_log_value
 
@@ -804,8 +803,6 @@ class AgentBuilder:
         raw_project_dir = request_context.get("active_mode_project_dir")
         if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
             raw_project_dir = request_context.get("project_dir")
-        if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
-            raw_project_dir = request_context.get(ACP_PROJECT_DIR_META_KEY)
         fork_raw = request_context.get("fork_project_dir")
         if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
             # spawn_subagent(fork=True) places the worktree here.
