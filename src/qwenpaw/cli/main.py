@@ -133,9 +133,7 @@ def _looks_like_project_path(value: str) -> bool:
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
     lazy_subcommands={
-        "acp": ("qwenpaw.cli.acp_cmd", "acp_cmd", ".acp_cmd"),
         "app": ("qwenpaw.cli.app_cmd", "app_cmd", ".app_cmd"),
-        "hub": ("qwenpaw.cli.hub_cmd", "hub_cmd", ".hub_cmd"),
         "channels": (
             "qwenpaw.cli.channels_cmd",
             "channels_group",
@@ -165,7 +163,6 @@ def _looks_like_project_path(value: str) -> bool:
             "uninstall_cmd",
             ".uninstall_cmd",
         ),
-        "desktop": ("qwenpaw.cli.desktop_cmd", "desktop_cmd", ".desktop_cmd"),
         "update": ("qwenpaw.cli.update_cmd", "update_cmd", ".update_cmd"),
         "shutdown": (
             "qwenpaw.cli.shutdown_cmd",

@@ -10,17 +10,10 @@ dependencies = [
     "websockets>=15.0.1,<16",
     "packaging>=24.0",
     "click>=8.1,<9",
-    "discord-py>=2.3",
-    "dingtalk-stream>=0.24.3",
-    "alibabacloud-dingtalk>=2.2.42",
-    "alibabacloud-tea-openapi>=0.4.4",
-    "alibabacloud-credentials>=0.3.0",
-    "alibabacloud-tea-util>=0.3.0",
     "uvicorn>=0.40.0",
     "apscheduler>=3.11.2,<4",
     "playwright>=1.49.0",
     "questionary>=2.1.1",
-    "mss>=9.0.0",
     "reme-ai==0.4.1.11",
     "reme-auto-fin==0.1.2",
     "reme-daily-paper==0.1.2",
@@ -28,15 +21,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "python-socks>=2.5.3",
     "onnxruntime<1.24",
-    "lark-oapi>=1.5.3",
-    "python-telegram-bot>=20.0",
-    "slack-bolt>=1.22.0",
-    "twilio>=9.10.2",
-    "pywebview>=4.0",
     "aiofiles>=24.1.0",
-    "paho-mqtt>=2.0.0",
-    "wecom-aibot-python-sdk==1.0.2",
-    "matrix-nio>=0.25.0",
     "shortuuid>=1.0.0",
     "google-genai>=1.67.0",
     "tzdata>=2024.1",
@@ -46,19 +31,10 @@ dependencies = [
     "wcmatch>=10.0",
     "json-repair>=0.30.0",
     "jsonschema>=4.0.0",
-    "segno>=1.6.6",
     "modelscope>=1.35.0",
     "huggingface_hub>=0.20.0",
     "pillow>=10.0.0",
     "agent-client-protocol>=0.9.0,<0.11.0",
-    # Streaming-markdown terminal UI for the bundled `qwenpaw` TUI
-    # (v4+ adds the streaming Markdown widget). 8.2.8 fixes parsing of
-    # multi-codepoint Kitty "associated text" so input methods (Chinese,
-    # Japanese, accents, ...) no longer leak escape sequences into the prompt
-    # (Textualize/textual#6592). Keep the temporary upper bound in sync with
-    # the TUI compatibility shim for Textualize/textual#6643; remove both
-    # after Textual ships and QwenPaw verifies the upstream fix.
-    "textual>=8.2.8,<8.2.9",
     "psutil>=6.0.0",
     "openai>=2.0.0,<=2.33.0",
     # anyio 4.13.0: _deliver_cancellation busy-loop / getpid storm (QwenPaw#2632)
@@ -74,7 +50,6 @@ dependencies = [
     "ast-grep-cli>=0.20",
     "html2text>=2024.2.26",
     "mcp>=1.28,<2.0",
-    "imap-tools>=1.13,<2.0",
 ]
 
 [project.urls]
@@ -87,7 +62,7 @@ Issues = "https://github.com/agentscope-ai/QwenPaw/issues"
 version = {attr = "qwenpaw.__version__.__version__"}
 
 [tool.setuptools]
-packages = { find = { where = ["src", "packages/qwenpawmail-mcp/src"] } }
+packages = { find = { where = ["src"] } }
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -110,7 +85,6 @@ include-package-data = true
     "browser/control_link/injected/*.js",
     "providers/data/**",
     "docs/*.md",
-    "app/channels/yuanbao/proto/**",
 ]
 
 [build-system]
@@ -120,7 +94,6 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 qwenpaw = "qwenpaw.cli.main:cli"
 copaw = "qwenpaw.cli.main:cli"
-qwenpawmail-mcp = "qwenpawmail_mcp.__main__:main"
 
 # Optional doctor plugins: callable (DoctorRunContext) -> list[str]
 # [project.entry-points."qwenpaw.doctor"]
@@ -144,15 +117,6 @@ dev = [
 local = [
     "huggingface_hub>=0.20.0",
 ]
-hub = [
-    "docker>=7.1.0,<8",
-]
-whisper = [
-    "openai-whisper>=20231117",
-]
-codex = [
-    "openai-codex==0.144.4",
-]
 qoder = [
     "qoder-agent-sdk==1.0.9",
 ]
@@ -163,18 +127,7 @@ qwenpaw-data = [
     "qwenpaw-data-skills>=0.1,<0.2",
 ]
 full = [
-    "qwenpaw[qwenpaw-data,hub,local,whisper,codex,qoder]",
-]
-sip = [
-    "pyVoIP>=1.6.0",
-    "dashscope>=1.0.0",
-    "dashscope-realtime>=0.1.0",
-    "audioop-lts; python_version >= '3.13'",
-]
-sip-livekit = [
-    "qwenpaw[sip]",
-    "livekit>=1.0.0",
-    "livekit-api>=0.6.0",
+    "qwenpaw[qwenpaw-data,local,qoder]",
 ]
 
 [tool.pytest.ini_options]

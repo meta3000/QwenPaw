@@ -16,24 +16,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _BUILTIN_SPECS: dict[str, tuple[str, str]] = {
-    "imessage": (".imessage", "IMessageChannel"),
-    "discord": (".discord_", "DiscordChannel"),
-    "dingtalk": (".dingtalk", "DingTalkChannel"),
-    "feishu": (".feishu", "FeishuChannel"),
-    "qq": (".qq", "QQChannel"),
-    "telegram": (".telegram", "TelegramChannel"),
-    "mattermost": (".mattermost", "MattermostChannel"),
-    "mqtt": (".mqtt", "MQTTChannel"),
     "console": (".console", "ConsoleChannel"),
-    "matrix": (".matrix", "MatrixChannel"),
-    "slack": (".slack", "SlackChannel"),
-    "voice": (".voice", "VoiceChannel"),
-    "sip": (".sip", "SIPChannel"),
-    "wecom": (".wecom", "WecomChannel"),
-    "xiaoyi": (".xiaoyi", "XiaoYiChannel"),
-    "yuanbao": (".yuanbao", "YuanbaoChannel"),
-    "wechat": (".wechat", "WeChatChannel"),
-    "onebot": (".onebot", "OneBotChannel"),
 }
 
 # Required channels must load; failures are raised, not skipped.

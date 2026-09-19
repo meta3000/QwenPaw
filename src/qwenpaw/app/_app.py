@@ -56,11 +56,9 @@ from .routers import create_agent_scoped_router
 from .routers import router as api_router
 from .routers.agent_scoped import AgentContextMiddleware
 from .routers.approval import router as approval_router
-from .routers.coding_mode import router as coding_mode_router
 from .routers.healthz import router as healthz_router
 from .routers.loops import router as loops_router
 from .routers.tool_calls import router as tool_calls_router
-from .routers.voice import voice_router
 
 # Apply log level on load so reload child process gets same level as CLI.
 logger = setup_logger(os.environ.get(LOG_LEVEL_ENV, "info"))
@@ -836,41 +834,6 @@ def get_doctor_runtime():
     }
 
 
-@app.post("/api/desktop/shutdown")
-async def post_desktop_shutdown(
-    x_qwenpaw_desktop_shutdown_token: str | None = Header(default=None),
-):
-    """Gracefully stop the desktop sidecar before the Tauri app exits.
-
-    The Tauri shell calls this on quit so uvicorn performs a normal shutdown
-    (running the lifespan ``finally`` block that flushes memory/index) instead
-    of being force-killed. Only available when running as the desktop sidecar.
-    """
-    from ..tauri.env import DESKTOP_APP_ENV, DESKTOP_SHUTDOWN_TOKEN_ENV
-
-    expected_token = os.environ.get(DESKTOP_SHUTDOWN_TOKEN_ENV)
-    if (
-        os.environ.get(DESKTOP_APP_ENV) != "1"
-        or not expected_token
-        or x_qwenpaw_desktop_shutdown_token is None
-        or not hmac.compare_digest(
-            x_qwenpaw_desktop_shutdown_token,
-            expected_token,
-        )
-    ):
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    server = getattr(app.state, "uvicorn_server", None)
-    if server is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Desktop backend is not ready",
-        )
-
-    server.should_exit = True
-    return {"ok": True}
-
-
 app.include_router(api_router, prefix="/api")
 
 # These registrations require the fully constructed application instance.
@@ -900,19 +863,12 @@ app.include_router(tool_calls_router, prefix="/api")
 # Approval router: /api/approval/approve, /api/approval/deny, etc.
 app.include_router(approval_router, prefix="/api")
 
-# Coding Mode router: /api/coding-mode
-app.include_router(coding_mode_router, prefix="/api")
-
 # Loops router: /api/loops
 app.include_router(loops_router, prefix="/api")
 
 # Agent-scoped router: /api/agents/{agentId}/chats, etc.
 agent_scoped_router = create_agent_scoped_router()
 app.include_router(agent_scoped_router, prefix="/api")
-
-# Voice channel: Twilio-facing endpoints at root level (not under /api/).
-# POST /voice/incoming, WS /voice/ws, POST /voice/status-callback
-app.include_router(voice_router, tags=["voice"])
 
 
 # Console static files and SPA fallback
