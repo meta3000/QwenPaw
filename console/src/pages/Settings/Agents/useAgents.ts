@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { agentsApi } from "@/api/modules/agents";
 import type { AgentSummary } from "@/api/types/agents";
 import { useAgentStore } from "@/stores/agentStore";
-import { purgeAgentSpace } from "@/os/osCleanup";
 
 interface UseAgentsReturn {
   agents: AgentSummary[];
@@ -71,8 +70,6 @@ export function useAgents(): UseAgentsReturn {
   const deleteAgent = async (agentId: string) => {
     try {
       await agentsApi.deleteAgent(agentId);
-      // Confirmed deletion: drop the agent's Desktop OS Space layout.
-      purgeAgentSpace(agentId);
       message.success(t("agent.deleteSuccess"));
       await fetchAgents(false, false);
     } catch (err: unknown) {

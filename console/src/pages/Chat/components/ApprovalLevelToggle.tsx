@@ -23,7 +23,7 @@ import {
   type ToolExecutionLevel,
 } from "../../../utils/approval";
 import { useIsMobile } from "../../../hooks/useIsMobile";
-import { OsDrawer } from "../../../os/OsOverlay";
+import { OsDrawer } from "@/components/OsDrawer";
 import drawerStyles from "./ApprovalToggle.module.less";
 
 const LEVEL_META: Record<

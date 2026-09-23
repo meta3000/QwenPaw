@@ -15,8 +15,6 @@ type MenuTreeItem = MenuItem & { __children?: MenuItem[] };
 
 const NATIVE_WORKSPACE_MENU_IDS = new Set([
   "core.workspace",
-  "core.import",
-  "core.acp",
   "core.agent-config",
   "core.agent-stats",
 ]);

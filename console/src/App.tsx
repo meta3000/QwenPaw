@@ -7,7 +7,7 @@ import {
 import { App as AntdApp, theme as antdTheme } from "antd";
 import type { ThemeConfig } from "antd";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import zhCN from "antd/locale/zh_CN";
 import enUS from "antd/locale/en_US";
@@ -26,37 +26,22 @@ import MainLayout from "./layouts/MainLayout";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { PluginProvider } from "./plugins/PluginContext";
 import { ApprovalProvider } from "./contexts/ApprovalContext";
-import { DesktopUpdateProvider } from "./contexts/DesktopUpdateContext";
-import { UpdateTakeoverGate } from "./components/UpdateTakeoverPage";
-import { Suspense, lazy } from "react";
 import { lazyImportWithRetry } from "./utils/lazyWithRetry";
 import {
-  addRouterBasename,
   getLoginHref,
   getLoginPath,
   getRouterBasename,
-  isOsPath,
 } from "./utils/navigationMode";
 
 const LoginPage = lazyImportWithRetry("./pages/Login/index");
-const HubPage = lazyImportWithRetry("./pages/Hub/index");
-// Desktop OS shell. Uses React.lazy (not lazyImportWithRetry, which only
-// resolves the ./pages/** glob) so it can load from ./os/.
-const DesktopOSPage = lazy(() => import("./os/DesktopOS"));
 import { languageApi } from "./api/modules/language";
 import { useUploadLimitStore } from "./stores/uploadLimitStore";
-import CloseWindowPrompt from "./tauri/CloseWindowPrompt";
-import BackendLoadingPage from "./tauri/BackendLoadingPage";
 import {
   resolveAuthGate,
   resolveBackendInfo,
   type BackendInfo,
 } from "./auth/gate";
 import type { AuthStatusResponse } from "./api/modules/auth";
-import { hubApi, type HubHealth } from "./api/modules/hub";
-import { isTauri } from "@tauri-apps/api/core";
-import { isDesktopTauriRuntime } from "./utils/openExternalLink";
-import { interceptBlankLinkClicks } from "./utils/interceptBlankLinkClicks";
 import "./styles/tokens.css";
 import "./styles/layout.css";
 import "./styles/form-override.css";
@@ -97,7 +82,6 @@ function AuthGuard({
     "loading" | "auth-required" | "ok" | "error"
   >("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,21 +101,13 @@ function AuthGuard({
     return () => {
       cancelled = true;
     };
-  }, [authStatus, retryKey]);
+  }, [authStatus]);
 
   if (status === "loading") {
     return null;
   }
   if (status === "error") {
-    return (
-      <BackendLoadingPage
-        status="error"
-        elapsed={0}
-        totalSec={1}
-        errorMessage={errorMessage}
-        onRetry={() => setRetryKey((current) => current + 1)}
-      />
-    );
+    return <div>Authentication error: {errorMessage}</div>;
   }
   if (status === "auth-required") {
     const loginTo = getLoginPath(window.location);
@@ -145,169 +121,7 @@ function AuthGuard({
   return <>{children}</>;
 }
 
-export function RuntimeAvailabilityGuard({
-  children,
-  enabled,
-}: {
-  children: React.ReactNode;
-  enabled: boolean;
-}) {
-  const { t } = useTranslation();
-  const [health, setHealth] = useState<HubHealth | null>(null);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [restarting, setRestarting] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    setHealth(null);
-    setErrorMessage("");
-    hubApi
-      .getHealth()
-      .then((nextHealth) => {
-        if (!cancelled) setHealth(nextHealth);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : "Runtime security preflight failed",
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, retryKey]);
-
-  useEffect(() => {
-    if (
-      !enabled ||
-      !health?.runtime_available ||
-      !["created", "starting", "stopped"].includes(health.runtime_state || "")
-    ) {
-      return;
-    }
-    const timeoutId = window.setTimeout(
-      () => setRetryKey((current) => current + 1),
-      1000,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [enabled, health]);
-
-  const restartRuntime = async () => {
-    setRestarting(true);
-    setHealth(null);
-    setErrorMessage("");
-    try {
-      await hubApi.restartOwnRuntime();
-      setRetryKey((current) => current + 1);
-    } catch (error: unknown) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Runtime restart failed",
-      );
-    } finally {
-      setRestarting(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!enabled || !health || health.runtime_available) return;
-    window.location.replace(
-      addRouterBasename(window.location.pathname, "/hub/admin"),
-    );
-  }, [enabled, health]);
-
-  if (!enabled) return <>{children}</>;
-  if (!health && !errorMessage) {
-    return (
-      <BackendLoadingPage
-        status="checking"
-        elapsed={0}
-        totalSec={1}
-        statusText={t("startup.starting")}
-        showRetry={false}
-      />
-    );
-  }
-  if (health?.runtime_desired_state === "stopped") {
-    const ownerCanStart = health.runtime_start_policy === "owner_allowed";
-    return (
-      <BackendLoadingPage
-        status="error"
-        elapsed={0}
-        totalSec={1}
-        statusText={t(
-          ownerCanStart
-            ? "account.runtimeStoppedTitle"
-            : "account.runtimeDisabledTitle",
-        )}
-        hintText={t(
-          ownerCanStart
-            ? "account.runtimeStoppedDescription"
-            : "account.runtimeDisabledDescription",
-        )}
-        errorMessage={errorMessage}
-        onRetry={restartRuntime}
-        retryLabel={
-          restarting
-            ? t("account.runtimeRestarting")
-            : t("account.runtimeRestart")
-        }
-        showRetry={ownerCanStart}
-        retryDisabled={restarting}
-      />
-    );
-  }
-  if (health?.runtime_available && health.runtime_state === "failed") {
-    return (
-      <BackendLoadingPage
-        status="error"
-        elapsed={0}
-        totalSec={1}
-        errorMessage={health.runtime_last_error || errorMessage}
-        onRetry={restartRuntime}
-        retryLabel={
-          restarting
-            ? t("account.runtimeRestarting")
-            : t("account.runtimeRestart")
-        }
-        retryDisabled={restarting}
-      />
-    );
-  }
-  if (health?.runtime_available && health.runtime_state === "running") {
-    return <>{children}</>;
-  }
-
-  if (health?.runtime_available) {
-    return (
-      <BackendLoadingPage
-        status="checking"
-        elapsed={0}
-        totalSec={1}
-        statusText={t("startup.starting")}
-        showRetry={false}
-      />
-    );
-  }
-
-  if (health) return null;
-
-  return (
-    <BackendLoadingPage
-      status="error"
-      elapsed={0}
-      totalSec={1}
-      errorMessage={errorMessage}
-      onRetry={() => setRetryKey((current) => current + 1)}
-    />
-  );
-}
-
 function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
-  const hubMode = backendInfo.mode === "hub";
   const basename = getRouterBasename(window.location.pathname);
   const { i18n } = useTranslation();
   const { isDark } = useTheme();
@@ -350,38 +164,7 @@ function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
     };
   }, [i18n]);
 
-  // Disable the default browser context menu in the Tauri desktop build so
-  // users cannot open DevTools via right-click. DevTools is still available
-  // through the hidden 8-click logo gesture handled in Header.tsx.
-  useEffect(() => {
-    if (!isTauri()) return;
-    const preventContextMenu = (e: MouseEvent) => e.preventDefault();
-    window.addEventListener("contextmenu", preventContextMenu);
-    return () => window.removeEventListener("contextmenu", preventContextMenu);
-  }, []);
-
-  // Vendor-rendered markdown (e.g. chat bubbles) emits native
-  // `<a target="_blank">` anchors we cannot override at the React level. The
-  // Tauri WebView ignores such clicks, so route them to the system browser.
-  useEffect(() => {
-    if (!isDesktopTauriRuntime()) return;
-    return interceptBlankLinkClicks();
-  }, []);
-
-  const osActive = isOsPath(window.location.pathname);
-
-  // The Desktop OS shell renders OUTSIDE any Router: each window supplies its
-  // own MemoryRouter (WindowRouter.tsx) and React Router forbids nesting a
-  // <Router> inside another. The classic browser layout keeps its BrowserRouter.
-  const routedContent = osActive ? (
-    <AuthGuard authStatus={backendInfo.authStatus} useHardRedirect>
-      <RuntimeAvailabilityGuard enabled={hubMode}>
-        <Suspense fallback={null}>
-          <DesktopOSPage />
-        </Suspense>
-      </RuntimeAvailabilityGuard>
-    </AuthGuard>
-  ) : (
+  const routedContent = (
     <BrowserRouter basename={basename}>
       <Routes>
         <Route
@@ -393,26 +176,10 @@ function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
           }
         />
         <Route
-          path="/hub/admin"
-          element={
-            hubMode ? (
-              <AuthGuard authStatus={backendInfo.authStatus}>
-                <Suspense fallback={null}>
-                  <HubPage />
-                </Suspense>
-              </AuthGuard>
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-        <Route
           path="/*"
           element={
             <AuthGuard authStatus={backendInfo.authStatus}>
-              <RuntimeAvailabilityGuard enabled={hubMode}>
-                <MainLayout hubMode={hubMode} />
-              </RuntimeAvailabilityGuard>
+              <MainLayout />
             </AuthGuard>
           }
         />
@@ -439,12 +206,7 @@ function AppInner({ backendInfo }: { backendInfo: BackendInfo }) {
         }}
       >
         <AntdApp>
-          <CloseWindowPrompt />
-          <DesktopUpdateProvider>
-            <UpdateTakeoverGate>
-              <ApprovalProvider>{routedContent}</ApprovalProvider>
-            </UpdateTakeoverGate>
-          </DesktopUpdateProvider>
+          <ApprovalProvider>{routedContent}</ApprovalProvider>
         </AntdApp>
       </ConfigProvider>
     </>
@@ -464,7 +226,6 @@ function BackendModeRouter() {
     "loading" | "error" | BackendInfo
   >("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -484,21 +245,13 @@ function BackendModeRouter() {
     return () => {
       cancelled = true;
     };
-  }, [retryKey]);
+  }, []);
 
   if (backendInfo === "loading") {
     return null;
   }
   if (backendInfo === "error") {
-    return (
-      <BackendLoadingPage
-        status="error"
-        elapsed={0}
-        totalSec={1}
-        errorMessage={errorMessage}
-        onRetry={() => setRetryKey((current) => current + 1)}
-      />
-    );
+    return <div>Backend error: {errorMessage}</div>;
   }
   return (
     <PluginProvider>

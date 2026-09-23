@@ -1,4 +1,10 @@
-import { request } from "../request";
+/**
+ * Harness type definitions.
+ *
+ * The harness backend has been removed. These types are kept solely to
+ * satisfy frontend imports until the remaining UI references are cleaned up.
+ * API methods return rejected promises.
+ */
 
 export interface HarnessProvider {
   id: string;
@@ -94,57 +100,33 @@ export interface HarnessLogin {
   command?: string;
 }
 
+// ── API stubs (backend removed) ─────────────────────────────────────────────
+
+const unavailable = () =>
+  Promise.reject(new Error("Harness backend has been removed"));
+
 export const harnessApi = {
-  list: () =>
-    request<{ providers: HarnessProvider[] }>("/harnesses", {
-      timeout: 60_000,
-    }),
-  listModels: (providerId: string) =>
-    request<{ models: HarnessModel[]; message?: string }>(
-      `/harnesses/${encodeURIComponent(providerId)}/models`,
-      { timeout: 60_000 },
-    ),
-  listMCP: (providerId: string) =>
-    request<{ servers: HarnessDiscoveredMCPServer[]; message?: string }>(
-      `/harnesses/${encodeURIComponent(providerId)}/mcp`,
-      { timeout: 60_000 },
-    ),
-  listSkills: (providerId: string) =>
-    request<{ skills: HarnessDiscoveredSkill[]; message?: string }>(
-      `/harnesses/${encodeURIComponent(providerId)}/skills`,
-      { timeout: 60_000 },
-    ),
-  status: (providerId: string, settings: Record<string, unknown> = {}) =>
-    request<HarnessProvider>(
-      `/harnesses/${encodeURIComponent(providerId)}/status`,
-      {
-        method: "POST",
-        body: JSON.stringify({ settings }),
-        timeout: 60_000,
-      },
-    ),
-  login: (
+  list: unavailable as () => Promise<{ providers: HarnessProvider[] }>,
+  listModels: unavailable as (
     providerId: string,
-    deviceCode = false,
-    settings: Record<string, unknown> = {},
-  ) =>
-    request<HarnessLogin>(
-      `/harnesses/${encodeURIComponent(providerId)}/login`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          device_code: deviceCode,
-          settings,
-        }),
-        timeout: 60_000,
-      },
-    ),
-  logout: (providerId: string, settings: Record<string, unknown> = {}) =>
-    request<{ ok: boolean }>(
-      `/harnesses/${encodeURIComponent(providerId)}/logout`,
-      {
-        method: "POST",
-        body: JSON.stringify({ settings }),
-      },
-    ),
+  ) => Promise<{ models: HarnessModel[]; message?: string }>,
+  listMCP: unavailable as (
+    providerId: string,
+  ) => Promise<{ servers: HarnessDiscoveredMCPServer[]; message?: string }>,
+  listSkills: unavailable as (
+    providerId: string,
+  ) => Promise<{ skills: HarnessDiscoveredSkill[]; message?: string }>,
+  status: unavailable as (
+    providerId: string,
+    settings?: Record<string, unknown>,
+  ) => Promise<HarnessProvider>,
+  login: unavailable as (
+    providerId: string,
+    deviceCode?: boolean,
+    settings?: Record<string, unknown>,
+  ) => Promise<HarnessLogin>,
+  logout: unavailable as (
+    providerId: string,
+    settings?: Record<string, unknown>,
+  ) => Promise<{ ok: boolean }>,
 };

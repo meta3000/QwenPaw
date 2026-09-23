@@ -28,20 +28,14 @@ import {
   SparkDataLine,
   SparkDateLine,
   SparkDebugLine,
-  SparkDownloadLine,
-  SparkEmailLine,
   SparkFile2Line,
-  SparkHistoryLine,
   SparkInternetLine,
   SparkMagicWandLine,
   SparkMcpMcpLine,
   SparkMicLine,
   SparkModePlazaLine,
   SparkModifyLine,
-  SparkMyApplicationLine,
   SparkOtherLine,
-  SparkSaveLine,
-  SparkScanLine,
   SparkToolLine,
   SparkUserGroupLine,
   SparkVoiceChat01Line,
@@ -57,31 +51,6 @@ const navLabel = (key: string, defaultValue?: string) => (): string =>
 
 export const BUILTIN_MENU: MenuItem[] = [
   // ── Agent-scoped (Sidebar Menu #1) ───────────────────────────────────────
-  {
-    id: "core.inbox",
-    location: "primary.agentScoped",
-    label: navLabel("nav.inbox"),
-    icon: SparkEmailLine,
-    route: "core.inbox",
-    order: 10,
-  },
-
-  {
-    id: "core.marketplace",
-    location: "primary.agentScoped",
-    label: navLabel("nav.marketplace", "Extension"),
-    icon: SparkMyApplicationLine,
-    route: "core.marketplace",
-    order: 15,
-  },
-  {
-    id: "core.import",
-    location: "primary.agentScoped",
-    label: navLabel("nav.import", "Import"),
-    icon: SparkDownloadLine,
-    route: "core.import",
-    order: 17,
-  },
 
   // control-group
   {
@@ -173,15 +142,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     order: 40,
   },
   {
-    id: "core.acp",
-    location: "primary.agentScoped",
-    parentId: "core.workspace-group",
-    label: navLabel("nav.acp"),
-    icon: SparkScanLine,
-    route: "core.acp",
-    order: 50,
-  },
-  {
     id: "core.agent-config",
     location: "primary.agentScoped",
     parentId: "core.workspace-group",
@@ -198,15 +158,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     icon: SparkBarChartLine,
     route: "core.agent-stats",
     order: 70,
-  },
-  {
-    id: "core.checkpoints",
-    location: "primary.agentScoped",
-    parentId: "core.agent-group",
-    label: navLabel("checkpoints.nav"),
-    icon: SparkHistoryLine,
-    route: "core.checkpoints",
-    order: 80,
   },
 
   // ── Settings (Sidebar Menu #2) ───────────────────────────────────────────
@@ -279,15 +230,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     icon: SparkDataLine,
     route: "core.token-usage",
     order: 70,
-  },
-  {
-    id: "core.backups",
-    location: "primary.settings",
-    parentId: "core.settings-group",
-    label: navLabel("nav.backups"),
-    icon: SparkSaveLine,
-    route: "core.backups",
-    order: 80,
   },
   {
     id: "core.voice-transcription",

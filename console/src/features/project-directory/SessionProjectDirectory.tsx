@@ -26,7 +26,7 @@ import {
 } from "../../api/modules/chatProjectDirectory";
 import { projectDirectoryApi } from "../../api/modules/projectDirectory";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { OsDrawer } from "../../os/OsOverlay";
+import { OsDrawer } from "../../components/OsDrawer";
 import { useProjectDirectoryStore } from "../../stores/projectDirectoryStore";
 import type {
   BrowseDirsResponse,

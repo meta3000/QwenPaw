@@ -6,13 +6,11 @@ import {
   Form,
   Tooltip,
   Popover,
-  Popconfirm,
-  Divider,
 } from "antd";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Check, History, RotateCw, Settings, ShieldCheck } from "lucide-react";
+import { Check, History, Settings } from "lucide-react";
 import { useAppMessage } from "../hooks/useAppMessage";
 import AgentSelector from "../components/AgentSelector";
 import {
@@ -49,7 +47,6 @@ import {
   orderSidebarEntries,
 } from "./registry/sidebarEntries";
 import type { ReactNode } from "react";
-import { hubApi } from "../api/modules/hub";
 import AppBrand from "./AppBrand";
 import { AgentStatusIndicator } from "../components/AgentStatusIndicator";
 import { getAgentDisplayName } from "../utils/agentDisplayName";
@@ -73,14 +70,12 @@ const INBOX_BADGE_POLLING_MS = 6000;
 interface SidebarProps {
   /** Route id of the currently active page (e.g. "core.workspace"). */
   selectedKey: string;
-  hubMode?: boolean;
 }
 
 // ── Sidebar ───────────────────────────────────────────────────────────────
 
 export default function Sidebar({
   selectedKey,
-  hubMode = false,
 }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -88,12 +83,9 @@ export default function Sidebar({
   const { message } = useAppMessage();
   const { isDark } = useTheme();
   const [authEnabled, setAuthEnabled] = useState(false);
-  const [hubAdmin, setHubAdmin] = useState(false);
-  const [hubUsername, setHubUsername] = useState("");
   const [authUsername, setAuthUsername] = useState("");
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [accountLoading, setAccountLoading] = useState(false);
-  const [runtimeRestarting, setRuntimeRestarting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
   const [agentPopoverOpen, setAgentPopoverOpen] = useState(false);
@@ -214,12 +206,7 @@ export default function Sidebar({
       .getStatus()
       .then(async (res) => {
         setAuthEnabled(res.enabled);
-        if (res.mode === "hub") {
-          const user = await hubApi.me();
-          setHubAdmin(user.role === "admin");
-          setHubUsername(user.username);
-          setAuthUsername(user.username);
-        } else if (res.enabled) {
+        if (res.enabled) {
           const user = await authApi.getCurrentUser();
           setAuthUsername(user.username);
         }
@@ -461,26 +448,18 @@ export default function Sidebar({
       return;
     }
 
-    if (!hubMode && !trimmedUsername && !trimmedPassword) {
+    if (!trimmedUsername && !trimmedPassword) {
       message.warning(t("account.nothingToUpdate"));
       return;
     }
 
     setAccountLoading(true);
     try {
-      if (hubMode) {
-        if (!trimmedPassword) {
-          message.warning(t("account.passwordRequired"));
-          return;
-        }
-        await hubApi.changePassword(trimmedPassword);
-      } else {
-        await authApi.updateProfile(
-          values.currentPassword || "",
-          trimmedUsername,
-          trimmedPassword,
-        );
-      }
+      await authApi.updateProfile(
+        values.currentPassword || "",
+        trimmedUsername,
+        trimmedPassword,
+      );
       message.success(t("account.updateSuccess"));
       setAccountModalOpen(false);
       accountForm.resetFields();
@@ -501,23 +480,6 @@ export default function Sidebar({
       message.error(msg);
     } finally {
       setAccountLoading(false);
-    }
-  };
-
-  const handleRestartRuntime = async () => {
-    setRuntimeRestarting(true);
-    try {
-      await hubApi.restartOwnRuntime();
-      message.success(t("account.runtimeRestartSuccess"));
-      window.location.reload();
-    } catch (error: unknown) {
-      message.error(
-        error instanceof Error
-          ? error.message
-          : t("account.runtimeRestartFailed"),
-      );
-    } finally {
-      setRuntimeRestarting(false);
     }
   };
 
@@ -828,20 +790,6 @@ export default function Sidebar({
         </>
       )}
 
-      {authEnabled && hubAdmin && !collapsed && (
-        <div className={styles.authActions}>
-          <Button
-            type="text"
-            icon={<ShieldCheck size={16} />}
-            onClick={() => navigate("/hub/admin")}
-            block
-            className={styles.authBtn}
-          >
-            {t("hub.brand.title")}
-          </Button>
-        </div>
-      )}
-
       <div className={styles.collapseToggleContainer}>
         {authEnabled && !collapsed && (
           <button
@@ -859,7 +807,7 @@ export default function Sidebar({
               <strong title={authUsername}>
                 {authUsername || t("common.loading")}
               </strong>
-              <span>{hubMode ? t("hub.brand.title") : "QwenPaw"}</span>
+              <span>QwenPaw</span>
             </span>
           </button>
         )}
@@ -907,51 +855,29 @@ export default function Sidebar({
           layout="vertical"
           onFinish={handleUpdateProfile}
         >
-          {hubMode ? (
-            <div className={styles.accountIdentity}>
-              <span>{t("account.username")}</span>
-              <strong>{hubUsername}</strong>
-            </div>
-          ) : (
-            <>
-              <Form.Item
-                name="currentPassword"
-                label={t("account.currentPassword")}
-                rules={[
-                  {
-                    required: true,
-                    message: t("account.currentPasswordRequired"),
-                  },
-                ]}
-              >
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="newUsername" label={t("account.newUsername")}>
-                <Input placeholder={t("account.newUsernamePlaceholder")} />
-              </Form.Item>
-            </>
-          )}
+          <>
+            <Form.Item
+              name="currentPassword"
+              label={t("account.currentPassword")}
+              rules={[
+                {
+                  required: true,
+                  message: t("account.currentPasswordRequired"),
+                },
+              ]}
+            >
+              <Input.Password />
+            </Form.Item>
+            <Form.Item name="newUsername" label={t("account.newUsername")}>
+              <Input placeholder={t("account.newUsernamePlaceholder")} />
+            </Form.Item>
+          </>
           <Form.Item
             name="newPassword"
             label={t("account.newPassword")}
-            rules={
-              hubMode
-                ? [
-                    {
-                      required: true,
-                      message: t("account.passwordRequired"),
-                    },
-                    { min: 8, message: t("hub.validation.passwordMin") },
-                  ]
-                : undefined
-            }
           >
             <Input.Password
-              placeholder={t(
-                hubMode
-                  ? "account.hubPasswordPlaceholder"
-                  : "account.newPasswordPlaceholder",
-              )}
+              placeholder={t("account.newPasswordPlaceholder")}
             />
           </Form.Item>
           <Form.Item
@@ -988,28 +914,6 @@ export default function Sidebar({
               {t("account.save")}
             </Button>
           </Form.Item>
-          {hubMode && (
-            <div className={styles.runtimeRecovery}>
-              <Divider />
-              <strong>{t("account.runtimeTitle")}</strong>
-              <p>{t("account.runtimeDescription")}</p>
-              <Popconfirm
-                title={t("account.runtimeRestartConfirmTitle")}
-                description={t("account.runtimeRestartConfirmDescription")}
-                onConfirm={handleRestartRuntime}
-                okText={t("account.runtimeRestart")}
-                cancelText={t("common.cancel")}
-              >
-                <Button
-                  icon={<RotateCw size={16} />}
-                  loading={runtimeRestarting}
-                  block
-                >
-                  {t("account.runtimeRestart")}
-                </Button>
-              </Popconfirm>
-            </div>
-          )}
         </Form>
       </Modal>
     </Sider>

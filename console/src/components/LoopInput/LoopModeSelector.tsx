@@ -4,10 +4,8 @@ import {
   CircleDot,
   LoaderCircle,
   MessageCircleQuestion,
-  Rocket,
   Settings2,
   Sparkles,
-  Target,
   X,
 } from "lucide-react";
 import { Popover, Tooltip } from "antd";
@@ -22,7 +20,7 @@ import {
   useLoopStore,
 } from "../../stores/loopStore";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { OsDrawer } from "../../os/OsOverlay";
+import { OsDrawer } from "../OsDrawer";
 import { InlineMarkdown } from "../Markdown/InlineMarkdown";
 import {
   resolveLoopModeDescriptionMarkdown,
@@ -31,8 +29,6 @@ import {
 import styles from "./index.module.less";
 
 function ModeIcon({ mode, size = 14 }: { mode: LoopModeInfo; size?: number }) {
-  if (mode.id === "goal") return <Target size={size} />;
-  if (mode.id === "mission") return <Rocket size={size} />;
   if (mode.source === "custom") return <Sparkles size={size} />;
   if (mode.source === "plugin") return <Boxes size={size} />;
   return <CircleDot size={size} />;

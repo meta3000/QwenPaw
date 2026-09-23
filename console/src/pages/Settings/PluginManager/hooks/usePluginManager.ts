@@ -20,7 +20,6 @@ import { compareVersions } from "@/layouts/constants";
 import { marketPluginMatches } from "@/utils/marketPluginIdentity";
 import { reloadFrontendPlugin, reloadPawApp } from "@/plugins/usePluginLoader";
 import { removePluginRuntime } from "@/plugins/pluginRuntimeCleanup";
-import { removePluginAppState } from "@/os/osCleanup";
 
 const MARKET_PAGE_SIZE = 50;
 const MARKET_MAX_PAGES = 20;
@@ -256,9 +255,7 @@ export function usePluginManager() {
           setUninstallingId(plugin.id);
           try {
             await uninstallPlugin(plugin.id);
-            if (plugin.plugin_type === "app") {
-              removePluginAppState(plugin.id);
-            } else {
+            if (plugin.plugin_type !== "app") {
               removePluginRuntime(plugin.id);
             }
             message.success(t("pluginManager.uninstallSuccess"));

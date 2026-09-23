@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import type { HarnessApprovalPreset } from "@/api/modules/harness";
 import { useIsMobile } from "../../../hooks/useIsMobile";
-import { OsDrawer } from "../../../os/OsOverlay";
+import { OsDrawer } from "@/components/OsDrawer";
 import drawerStyles from "./ApprovalToggle.module.less";
 import styles from "./HarnessApprovalToggle.module.less";
 

@@ -21,16 +21,13 @@ import type { Route } from "../../plugins/registry/types";
 const ChatPage = lazyImportWithRetry("../../pages/Chat");
 const ChannelsPage = lazyImportWithRetry("../../pages/Control/Channels");
 const SessionsPage = lazyImportWithRetry("../../pages/Control/Sessions");
-const InboxPage = lazyImportWithRetry("../../pages/Inbox");
 const CronJobsPage = lazyImportWithRetry("../../pages/Control/CronJobs");
 const HeartbeatPage = lazyImportWithRetry("../../pages/Control/Heartbeat");
 const AgentConfigPage = lazyImportWithRetry("../../pages/Agent/Config");
 const SkillsPage = lazyImportWithRetry("../../pages/Agent/Skills");
 const SkillPoolPage = lazyImportWithRetry("../../pages/Settings/SkillPool");
 const ToolsPage = lazyImportWithRetry("../../pages/Agent/Tools");
-const CheckpointsPage = lazyImportWithRetry("../../pages/Agent/Checkpoints");
 const MCPPage = lazyImportWithRetry("../../pages/Agent/MCP");
-const ACPPage = lazyImportWithRetry("../../pages/Agent/ACP");
 const ModelsPage = lazyImportWithRetry("../../pages/Settings/Models");
 const EnvironmentsPage = lazyImportWithRetry(
   "../../pages/Settings/Environments",
@@ -46,11 +43,7 @@ const VoiceTranscriptionPage = lazyImportWithRetry(
 );
 const AgentsPage = lazyImportWithRetry("../../pages/Settings/Agents");
 const DebugPage = lazyImportWithRetry("../../pages/Settings/Debug");
-const BackupsPage = lazyImportWithRetry("../../pages/Settings/Backups");
-const AppCenterPage = lazyImportWithRetry("../../pages/AppCenter");
-const MarketplacePage = lazyImportWithRetry("../../pages/Market");
 const FilesPage = lazyImportWithRetry("../../pages/Files");
-const ImportPage = lazyImportWithRetry("../../pages/Import");
 const SettingsCenterPage = lazyImportWithRetry("../../pages/SettingsCenter");
 
 /**
@@ -58,11 +51,6 @@ const SettingsCenterPage = lazyImportWithRetry("../../pages/SettingsCenter");
  */
 function DefaultRedirect() {
   return <Navigate to="/chat" replace />;
-}
-
-/** Synonym for /acp. Kept for plugins / external links that reference uppercase. */
-function ACPRedirect() {
-  return <Navigate to="/acp" replace />;
 }
 
 export const BUILTIN_ROUTES: Route[] = [
@@ -76,16 +64,12 @@ export const BUILTIN_ROUTES: Route[] = [
   { id: "core.files", path: "/files", component: FilesPage },
   { id: "core.channels", path: "/channels", component: ChannelsPage },
   { id: "core.sessions", path: "/sessions", component: SessionsPage },
-  { id: "core.inbox", path: "/inbox", component: InboxPage },
   { id: "core.cron-jobs", path: "/cron-jobs", component: CronJobsPage },
   { id: "core.heartbeat", path: "/heartbeat", component: HeartbeatPage },
   { id: "core.skills", path: "/skills", component: SkillsPage },
   { id: "core.skill-pool", path: "/skill-pool", component: SkillPoolPage },
   { id: "core.tools", path: "/tools", component: ToolsPage },
   { id: "core.mcp", path: "/mcp", component: MCPPage },
-  { id: "core.acp", path: "/acp", component: ACPPage },
-  { id: "core.acp-alias", path: "/ACP", component: ACPRedirect },
-  { id: "core.checkpoints", path: "/checkpoints", component: CheckpointsPage },
   { id: "core.agents", path: "/agents", component: AgentsPage },
   { id: "core.models", path: "/models", component: ModelsPage },
   {
@@ -112,16 +96,6 @@ export const BUILTIN_ROUTES: Route[] = [
     component: VoiceTranscriptionPage,
   },
   { id: "core.debug", path: "/debug", component: DebugPage },
-  { id: "core.backups", path: "/backups", component: BackupsPage },
-  { id: "core.marketplace", path: "/market", component: MarketplacePage },
-  { id: "core.import", path: "/imports", component: ImportPage },
-  // Deep-link / refresh target: `/apps/<id>` also lands on the App Center,
-  // which opens the app inline (with the “← App Center” bar) from the URL.
-  {
-    id: "core.app-center.embed",
-    path: "/apps/:appId",
-    component: AppCenterPage,
-  },
 ];
 
 routeRegistry.addBuiltin(BUILTIN_ROUTES);

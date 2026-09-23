@@ -1,11 +1,7 @@
 /**
- * Cross-runtime file download helper for browser, legacy pywebview, and Tauri.
- * Tauri streams local backend downloads in Rust to avoid proxying localhost.
+ * Cross-runtime file download helper for browser and legacy pywebview.
  */
-import { invoke } from "@tauri-apps/api/core";
-import { save } from "@tauri-apps/plugin-dialog";
 import {
-  isDesktopTauriRuntime,
   isHttpExternalUrl,
   resolveExternalUrl,
 } from "./openExternalLink";
@@ -19,12 +15,6 @@ export interface DownloadFileOptions {
    * Native desktop paths use the fallback filename shown in the save dialog.
    */
   preferResponseFilename?: boolean;
-}
-
-interface DownloadBackendFileRequest {
-  url: string;
-  filePath: string;
-  headers?: Record<string, string>;
 }
 
 export class DownloadCancelledError extends Error {
@@ -72,8 +62,6 @@ function triggerBrowserDownload(blob: Blob, filename: string): void {
 
 /** Normalize suggested filenames for native save dialogs across platforms. */
 function sanitizeSaveFilename(filename: string): string {
-  // Use Windows-safe names for native dialogs so suggested filenames work
-  // across both packaged desktop shells and all supported OS file systems.
   const sanitized = filename
     .replace(/[<>:"/\\|?*]/g, "_")
     .trim()
@@ -95,45 +83,6 @@ async function downloadWithPyWebView(
       : await saveFile(url, filename);
   if (!saved) {
     throw new DownloadCancelledError();
-  }
-}
-
-/** Ask Tauri's native dialog plugin for the destination path. */
-async function getTauriSavePath(filename: string): Promise<string> {
-  const savePath = await save({
-    defaultPath: filename,
-  });
-  // No path means the user cancelled the native save dialog; it is not an error.
-  if (!savePath) {
-    throw new DownloadCancelledError();
-  }
-  return savePath;
-}
-
-/** Save in Tauri by streaming the local backend response through Rust. */
-async function downloadWithTauri(
-  url: string,
-  filename: string,
-  options: DownloadFileOptions,
-): Promise<void> {
-  const savePath = await getTauriSavePath(filename);
-  try {
-    await invoke("download_backend_file", {
-      request: {
-        url,
-        filePath: savePath,
-        headers: options.headers,
-      } satisfies DownloadBackendFileRequest,
-    });
-  } catch (error) {
-    if (options.errorMessage) {
-      const wrappedError = new Error(options.errorMessage) as Error & {
-        cause?: unknown;
-      };
-      wrappedError.cause = error;
-      throw wrappedError;
-    }
-    throw error;
   }
 }
 
@@ -161,7 +110,7 @@ async function downloadWithBrowser(
   );
 }
 
-/** Download a URL using the best available runtime path: pywebview, Tauri, or browser. */
+/** Download a URL using the best available runtime path: pywebview or browser. */
 export async function downloadFileFromUrl(
   url: string,
   filename: string,
@@ -185,11 +134,6 @@ export async function downloadFileFromUrl(
       safeFilename,
       options,
     );
-    return;
-  }
-
-  if (isDesktopTauriRuntime()) {
-    await downloadWithTauri(requestUrl, safeFilename, options);
     return;
   }
 

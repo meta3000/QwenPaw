@@ -25,8 +25,6 @@ const mocks = vi.hoisted(() => ({
   pushMessages: { pending_approvals: [] as unknown[] },
   sessionList: [] as unknown[],
   updateProfile: vi.fn().mockResolvedValue({}),
-  changePassword: vi.fn().mockResolvedValue({}),
-  restartRuntime: vi.fn().mockResolvedValue({}),
   setSelectedAgent: vi.fn(),
   refreshAgents: vi.fn().mockResolvedValue(undefined),
 }));
@@ -110,14 +108,6 @@ vi.mock("../api/modules/auth", () => ({
     getStatus: () => Promise.resolve(mocks.authStatus),
     getCurrentUser: () => Promise.resolve({ username: "testuser" }),
     updateProfile: (...args: unknown[]) => mocks.updateProfile(...args),
-  },
-}));
-
-vi.mock("../api/modules/hub", () => ({
-  hubApi: {
-    me: () => Promise.resolve({ role: "admin", username: "hubuser" }),
-    changePassword: (...args: unknown[]) => mocks.changePassword(...args),
-    restartOwnRuntime: (...args: unknown[]) => mocks.restartRuntime(...args),
   },
 }));
 
@@ -250,13 +240,12 @@ function LocationProbe() {
 }
 
 function renderSidebar(
-  props: { selectedKey?: string; hubMode?: boolean } = {},
+  props: { selectedKey?: string } = {},
 ) {
   return renderWithProviders(
     <>
       <Sidebar
         selectedKey={props.selectedKey ?? "core.workspace"}
-        hubMode={props.hubMode}
       />
       <LocationProbe />
     </>,
@@ -323,8 +312,6 @@ describe("Sidebar", () => {
     mocks.pushMessages = { pending_approvals: [] };
     mocks.sessionList = [];
     mocks.updateProfile.mockClear().mockResolvedValue({});
-    mocks.changePassword.mockClear().mockResolvedValue({});
-    mocks.restartRuntime.mockClear().mockResolvedValue({});
     mocks.setSelectedAgent.mockClear();
     mocks.refreshAgents.mockClear().mockResolvedValue(undefined);
   });
@@ -541,34 +528,6 @@ describe("Sidebar", () => {
         "new-user",
         undefined,
       );
-    });
-  });
-
-  it("requires a password in hub mode", async () => {
-    mocks.authStatus = { enabled: true, mode: "hub" };
-    renderSidebar({ hubMode: true });
-    await openAccountModal();
-    // Hub mode shows the username identity
-    await waitFor(() => {
-      expect(screen.getAllByText("hubuser").length).toBeGreaterThan(0);
-    });
-    // Submit with an empty password → passwordRequired warning, no call
-    fireEvent.click(screen.getByText("account.save"));
-    await waitFor(() => {
-      expect(mocks.changePassword).not.toHaveBeenCalled();
-    });
-  });
-
-  it("reports restart failures in hub mode", async () => {
-    mocks.authStatus = { enabled: true, mode: "hub" };
-    mocks.restartRuntime.mockRejectedValue(new Error("restart refused"));
-    renderSidebar({ hubMode: true });
-    await openAccountModal();
-    // The restart confirm lives behind a Popconfirm; invoking the handler
-    // directly via the rendered button is flaky with antd Popconfirm in
-    // jsdom, so assert the modal content is present instead.
-    await waitFor(() => {
-      expect(screen.getByText("account.runtimeTitle")).toBeTruthy();
     });
   });
 

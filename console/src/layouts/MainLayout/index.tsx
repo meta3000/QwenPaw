@@ -15,7 +15,7 @@ import { pickSelectedKey } from "./routeSelection";
 
 const { Content } = Layout;
 
-export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
+export default function MainLayout() {
   const { t } = useTranslation();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -44,7 +44,7 @@ export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
   return (
     <Layout className={styles.mainLayout}>
       {!settingsCenterActive && (
-        <Sidebar selectedKey={selectedKey} hubMode={hubMode} />
+        <Sidebar selectedKey={selectedKey} />
       )}
       <Layout className={styles.mainContentLayout}>
         <Header showBrand={settingsCenterActive} />
@@ -55,7 +55,6 @@ export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
           <div className="page-content">
             <ChunkErrorBoundary
               resetKey={currentPath}
-              canRestartRuntime={hubMode}
             >
               <Suspense
                 fallback={
