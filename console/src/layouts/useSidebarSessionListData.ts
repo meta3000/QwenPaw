@@ -10,12 +10,11 @@ import {
   useContextMenu,
   type ContextMenuItem,
 } from "../components/ContextMenu";
-import { getChannelLabel } from "../pages/Control/Channels/components";
 import { syncSessionsGlobal } from "../stores/sessionListStore";
 import { useAgentStore } from "../stores/agentStore";
 import { useAppMessage } from "../hooks/useAppMessage";
 
-export { ContextMenu, useContextMenu, type ContextMenuItem, getChannelLabel };
+export { ContextMenu, useContextMenu, type ContextMenuItem };
 
 /**
  * Shallow-compare two session arrays by visible fields.

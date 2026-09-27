@@ -27,19 +27,15 @@ import {
   SparkBrowseLine,
   SparkDataLine,
   SparkDateLine,
-  SparkDebugLine,
   SparkFile2Line,
   SparkInternetLine,
   SparkMagicWandLine,
   SparkMcpMcpLine,
-  SparkMicLine,
   SparkModePlazaLine,
   SparkModifyLine,
   SparkOtherLine,
   SparkToolLine,
   SparkUserGroupLine,
-  SparkVoiceChat01Line,
-  SparkWifiLine,
 } from "@agentscope-ai/icons";
 import i18next from "i18next";
 import { menuRegistry } from "../../plugins/registry/store";
@@ -61,15 +57,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     order: 20,
   },
   {
-    id: "core.channels",
-    location: "primary.agentScoped",
-    parentId: "core.control-group",
-    label: navLabel("nav.channels"),
-    icon: SparkWifiLine,
-    route: "core.channels",
-    order: 10,
-  },
-  {
     id: "core.sessions",
     location: "primary.agentScoped",
     parentId: "core.control-group",
@@ -86,15 +73,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     icon: SparkDateLine,
     route: "core.cron-jobs",
     order: 30,
-  },
-  {
-    id: "core.heartbeat",
-    location: "primary.agentScoped",
-    parentId: "core.control-group",
-    label: navLabel("nav.heartbeat"),
-    icon: SparkVoiceChat01Line,
-    route: "core.heartbeat",
-    order: 40,
   },
 
   // workspace-group
@@ -230,24 +208,6 @@ export const BUILTIN_MENU: MenuItem[] = [
     icon: SparkDataLine,
     route: "core.token-usage",
     order: 70,
-  },
-  {
-    id: "core.voice-transcription",
-    location: "primary.settings",
-    parentId: "core.settings-group",
-    label: navLabel("nav.voiceTranscription"),
-    icon: SparkMicLine,
-    route: "core.voice-transcription",
-    order: 90,
-  },
-  {
-    id: "core.debug",
-    location: "primary.settings",
-    parentId: "core.settings-group",
-    label: navLabel("nav.debug", "Debug"),
-    icon: SparkDebugLine,
-    route: "core.debug",
-    order: 100,
   },
 ];
 

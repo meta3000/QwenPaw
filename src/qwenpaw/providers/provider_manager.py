@@ -61,12 +61,10 @@ for _catalog_name in _provider_catalog.__all__:
 # historical provider_manager module surface.
 KIMI_CODINGPLAN_MODELS = _provider_catalog.KIMI_CODINGPLAN_MODELS
 KIMI_MODELS = _provider_catalog.KIMI_MODELS
-MIMO_TOKENPLAN_MODELS = _provider_catalog.MIMO_TOKENPLAN_MODELS
 OPENCODE_MODELS = _provider_catalog.OPENCODE_MODELS
 PROVIDER_KIMI_CN = _provider_catalog.PROVIDER_KIMI_CN
 PROVIDER_KIMI_CODINGPLAN = _provider_catalog.PROVIDER_KIMI_CODINGPLAN
 PROVIDER_KIMI_INTL = _provider_catalog.PROVIDER_KIMI_INTL
-PROVIDER_MIMO_TOKENPLAN = _provider_catalog.PROVIDER_MIMO_TOKENPLAN
 PROVIDER_OPENCODE = _provider_catalog.PROVIDER_OPENCODE
 PROVIDER_SILICONFLOW_CN = _provider_catalog.PROVIDER_SILICONFLOW_CN
 PROVIDER_SILICONFLOW_INTL = _provider_catalog.PROVIDER_SILICONFLOW_INTL
@@ -391,29 +389,6 @@ class ProviderManager(
             model.availability_retryable = True
             model.availability_checked_at = None
             model.availability_verification = "unverified"
-
-    def start_local_model_resume(self, local_manager) -> None:
-        """Schedule background restore of the active local model server."""
-        task = asyncio.create_task(
-            self._resume_local_model(local_manager),
-            name="qwenpaw-local-model-resume",
-        )
-        task.add_done_callback(self._on_local_model_resume_done)
-
-    @staticmethod
-    def _on_local_model_resume_done(task: asyncio.Task[None]) -> None:
-        """Log unexpected failures from background local model restore."""
-        if task.cancelled():
-            return
-
-        exc = task.exception()
-        if exc is not None:
-            logger.warning(
-                "Background local model restore failed: %s",
-                exc,
-                exc_info=exc,
-            )
-        logger.info("Background local model restore completed")
 
     def _resolve_custom_provider_id(self, provider_id: str) -> str:
         """Resolve provider ID conflicts for a custom provider."""
@@ -873,60 +848,6 @@ class ProviderManager(
         self._annotation_service.apply(
             self.builtin_providers.values(),
             refresh=refresh,
-        )
-
-    async def _resume_local_model(self, local_manager) -> None:
-        """Resume the active local model server from the previous run."""
-
-        async def _clear_local_provider() -> None:
-            await self.update_provider_async(
-                "qwenpaw-local",
-                {
-                    "base_url": "",
-                    "extra_models": [],
-                },
-            )
-
-        local_models = self.get_provider("qwenpaw-local").extra_models
-        model_id = local_models[0].id if local_models else None
-        if model_id is None:
-            return
-
-        installed, _ = local_manager.check_llamacpp_installation()
-        if not installed:
-            logger.info(
-                "Skipping local model restore because"
-                " llama.cpp is not installed.",
-            )
-            await _clear_local_provider()
-            return
-
-        if not local_manager.is_model_downloaded(model_id):
-            logger.warning(
-                "Skipping local model restore because"
-                " model is not downloaded: %s",
-                model_id,
-            )
-            await _clear_local_provider()
-            return
-
-        try:
-            setup_result = await local_manager.setup_server(model_id)
-        except (FileNotFoundError, RuntimeError, ValueError) as exc:
-            logger.warning(
-                "Failed to restore local model server for %s: %s",
-                model_id,
-                exc,
-            )
-            await _clear_local_provider()
-            return
-
-        await self.update_provider_async(
-            "qwenpaw-local",
-            {
-                "base_url": f"http://127.0.0.1:{setup_result.port}/v1",
-                "extra_models": [setup_result.model_info],
-            },
         )
 
     def unregister_plugin_provider(self, provider_id: str) -> bool:

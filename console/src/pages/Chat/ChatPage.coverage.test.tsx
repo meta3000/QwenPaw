@@ -28,7 +28,6 @@ const {
   mockGetApiUrl,
   mockSelectedAgent,
   mockSetSelectedAgent,
-  mockGetTranscriptionProviderType,
   mockCopyText,
   mockBeginLoopModeSubmission,
   mockRequiresQwenPawModel,
@@ -47,7 +46,6 @@ const {
   mockGetApiUrl: vi.fn((p: string) => `http://localhost:3000${p}`),
   mockSelectedAgent: vi.fn(() => "default"),
   mockSetSelectedAgent: vi.fn(),
-  mockGetTranscriptionProviderType: vi.fn(),
   mockCopyText: vi.fn().mockResolvedValue(undefined),
   mockBeginLoopModeSubmission: vi.fn((text: string) => text),
   mockRequiresQwenPawModel: vi.fn(() => true),
@@ -135,13 +133,6 @@ vi.mock("@/api/modules/chat", () => ({
     getChatStatus: mockGetChatStatus,
     stopChat: vi.fn(() => Promise.resolve()),
   },
-}));
-
-vi.mock("@/api/modules/agent", () => ({
-  agentApi: {
-    getTranscriptionProviderType: mockGetTranscriptionProviderType,
-  },
-  TranscriptionError: class TranscriptionError extends Error {},
 }));
 
 vi.mock("@/api/config", () => ({
@@ -351,10 +342,6 @@ vi.mock("motion/react", async () => {
   };
 });
 
-vi.mock("./components/WhisperSpeechButton", () => ({
-  default: vi.fn(() => <div data-testid="whisper-btn" />),
-}));
-
 vi.mock("../../components/LoopInput", () => ({
   LoopModeSelector: () => null,
 }));
@@ -555,9 +542,6 @@ describe("ChatPage coverage", () => {
     mockUploadFile.mockResolvedValue({
       url: "uploaded.png",
       file_name: "uploaded.png",
-    });
-    mockGetTranscriptionProviderType.mockResolvedValue({
-      transcription_provider_type: "disabled",
     });
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -1928,21 +1912,6 @@ describe("ChatPage coverage", () => {
     expect(capturedOptions?.cards?.Audios).toBeTruthy();
   });
 
-  // ── Whisper speech button renders when enabled ─────────────────────────
-  it("renders whisper button when transcription is enabled", async () => {
-    mockGetTranscriptionProviderType.mockResolvedValueOnce({
-      transcription_provider_type: "openai_whisper",
-    });
-    renderWithProviders(<ChatPage />, {
-      initialEntries: ["/chat/test-session"],
-    });
-    await screen.findByTestId("chat-ui");
-    // Whisper button should appear when enabled
-    await waitFor(() => {
-      expect(screen.getByTestId("whisper-btn")).toBeInTheDocument();
-    });
-  });
-
   // ── /chat/new route creates fresh session ──────────────────────────────
   it("/chat/new route renders with correct options", async () => {
     renderWithProviders(<ChatPage />, { initialEntries: ["/chat/new"] });
@@ -2112,37 +2081,6 @@ describe("ChatPage coverage", () => {
       expect(Array.isArray(parsed.output)).toBe(true);
       expect(parsed.output.length).toBeGreaterThanOrEqual(1);
     }
-  });
-
-  // ── Ctrl+Shift+M shortcut for voice recording ─────────────────────────
-  it("Ctrl+Shift+M shortcut triggers whisper recording when enabled", async () => {
-    mockGetTranscriptionProviderType.mockResolvedValueOnce({
-      transcription_provider_type: "openai_whisper",
-    });
-    renderWithProviders(<ChatPage />, {
-      initialEntries: ["/chat/test-session"],
-    });
-    await screen.findByTestId("chat-ui");
-
-    // Wait for whisper to be checked
-    await waitFor(() => {
-      expect(screen.getByTestId("whisper-btn")).toBeInTheDocument();
-    });
-
-    // Dispatch the shortcut key
-    act(() => {
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "m",
-          ctrlKey: true,
-          shiftKey: true,
-          bubbles: true,
-        }),
-      );
-    });
-
-    // Should not throw
-    expect(true).toBe(true);
   });
 
   // ── Tab key completion for slash commands ──────────────────────────────

@@ -43,7 +43,6 @@ from .file_io import (  # noqa: E402
     append_file,
 )
 from .file_search import grep_search, glob_search  # noqa: E402
-from .shell import execute_shell_command  # noqa: E402
 from .web_search import web_search, web_fetch  # noqa: E402
 from .get_current_time import get_current_time, set_user_timezone  # noqa: E402
 from .get_token_usage import get_token_usage  # noqa: E402

@@ -28,7 +28,7 @@ from qwenpaw.schemas import (
     _coerce_content_item,
 )
 from qwenpaw.utils.timeout import resolve_stream_task_timeout
-from ...utils.logging import LOG_FILE_PATH, sanitize_log_value
+from ...utils.logging import sanitize_log_value
 from ..agent_context import get_agent_for_request
 from ..approvals.display import approval_display_fields
 from ..chats.title_generator import generate_and_update_title
@@ -63,7 +63,6 @@ class MarkInboxReadRequest(BaseModel):
     all: bool = False
 
 
-MAX_DEBUG_LOG_LINES = 1000
 
 
 def _resolve_effective_stream_task_timeout(
@@ -334,33 +333,6 @@ def _empty_sse_response() -> StreamingResponse:
     )
 
 
-def _tail_text_file(
-    path: Path,
-    *,
-    lines: int = 200,
-    max_bytes: int = 512 * 1024,
-) -> str:
-    """Read the last N lines from a text file with bounded memory."""
-    path = Path(path)
-    if not path.exists() or not path.is_file():
-        return ""
-    try:
-        size = path.stat().st_size
-        if size == 0:
-            return ""
-        with open(path, "rb") as f:
-            if size <= max_bytes:
-                data = f.read()
-            else:
-                f.seek(max(size - max_bytes, 0))
-                data = f.read()
-        text = data.decode("utf-8", errors="replace")
-        return "\n".join(text.splitlines()[-lines:])
-    except Exception:
-        logger.exception("Failed to read backend debug log file")
-        return ""
-
-
 @router.post(
     "/chat",
     status_code=200,
@@ -552,42 +524,6 @@ async def post_console_upload(
     }
 
 
-@router.get(
-    "/debug/backend-logs",
-    response_model=dict,
-    summary="Read backend daemon logs for debug page",
-)
-async def get_backend_debug_logs(
-    lines: int = Query(
-        200,
-        ge=20,
-        le=MAX_DEBUG_LOG_LINES,
-        description="Number of trailing log lines to return",
-    ),
-) -> dict:
-    """Return the tail of the project log file for the debug UI."""
-    log_path = LOG_FILE_PATH.resolve()
-    try:
-        st = log_path.stat()
-        return {
-            "path": str(log_path),
-            "exists": True,
-            "lines": lines,
-            "updated_at": st.st_mtime,
-            "size": st.st_size,
-            "content": _tail_text_file(log_path, lines=lines),
-        }
-    except FileNotFoundError:
-        return {
-            "path": str(log_path),
-            "exists": False,
-            "lines": lines,
-            "updated_at": None,
-            "size": 0,
-            "content": "",
-        }
-
-
 @router.get("/push-messages")
 async def get_push_messages(
     session_id: str | None = Query(None, description="Optional session id"),
@@ -731,80 +667,6 @@ def _parse_sse_payload(line: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _finalize_background_fork(
-    project_dir: str,
-    branch: str,
-    *,
-    scope_id: str,
-) -> bool:
-    """Finish an in-flight fork commit before publishing a *success* result.
-
-    Cancelling ``asyncio.to_thread`` cannot stop the Git worker. If the
-    parent task is cancelled (timeout or manual cancel), re-raise immediately
-    so the task API can publish a terminal failure. The Git worker keeps
-    running as detached bookkeeping and must not rewrite that failure into
-    ``completed``.
-    """
-    from qwenpaw.agents.fork_project import finalize_fork_worktree_or_fail
-
-    finalizer = asyncio.create_task(
-        asyncio.to_thread(
-            finalize_fork_worktree_or_fail,
-            project_dir,
-            branch,
-            message=f"fork worker {branch}",
-            expected_scope=scope_id or None,
-        ),
-    )
-
-    def _log_detached(task: asyncio.Task) -> None:
-        try:
-            task.result()
-        except Exception:
-            logger.warning(
-                "Detached fork finalize failed for %s",
-                sanitize_log_value(branch),
-                exc_info=True,
-            )
-
-    try:
-        return await asyncio.shield(finalizer)
-    except asyncio.CancelledError:
-        if not finalizer.done():
-            finalizer.add_done_callback(_log_detached)
-        raise
-
-
-async def _mark_background_fork_failed(
-    project_dir: str,
-    branch: str,
-    *,
-    scope_id: str,
-    reason: str,
-    context: str,
-) -> None:
-    """Best-effort fork failure bookkeeping for background tasks."""
-    if not project_dir or not branch:
-        return
-    try:
-        from qwenpaw.agents.fork_project import mark_fork_failed
-
-        await asyncio.to_thread(
-            mark_fork_failed,
-            project_dir,
-            branch,
-            reason=reason,
-            expected_scope=scope_id or None,
-        )
-    except Exception:
-        logger.warning(
-            "mark_fork_failed after %s failed for %s",
-            context,
-            sanitize_log_value(branch),
-            exc_info=True,
-        )
-
-
 @router.post(
     "/chat/task",
     status_code=200,
@@ -861,20 +723,8 @@ async def post_console_chat_task(
         native_payload,
     )
 
-    fork_project_dir = ""
-    fork_worktree_branch = ""
-    fork_scope_id = ""
-    rc = request_data.get("request_context")
-    if isinstance(rc, dict):
-        fork_project_dir = str(rc.get("fork_project_dir") or "")
-        fork_worktree_branch = str(
-            rc.get("fork_worktree_branch") or "",
-        )
-        fork_scope_id = str(rc.get("fork_scope_id") or "")
-
     # Project directories are resolved exactly once, inside
-    # ContextVarsSetupHook (fork override included); the router no
-    # longer pre-resolves or injects them.
+    # ContextVarsSetupHook; the router no longer pre-resolves or injects them.
 
     bg = _BackgroundTask(
         status="running",
@@ -915,20 +765,14 @@ async def post_console_chat_task(
             ),
         )
 
-    # pylint: disable-next=too-many-branches
     async def _run() -> None:
         last_response: Optional[Dict[str, Any]] = None
-        finalize_started = False
         try:
             async for sse_line in tracker.stream_from_queue(queue, chat.id):
                 parsed = _parse_sse_payload(sse_line)
                 if parsed and parsed.get("type") != "turn_usage":
                     last_response = parsed
 
-            # ``stream_from_queue`` intentionally consumes cancellation so an
-            # aborted SSE client does not leak it.  This background consumer,
-            # however, owns the tracked run and must preserve task
-            # cancellation.
             current_task = asyncio.current_task()
             if current_task is not None and current_task.cancelling():
                 raise asyncio.CancelledError
@@ -937,42 +781,6 @@ async def post_console_chat_task(
                 raise asyncio.CancelledError
             if producer_error is not None:
                 raise producer_error
-
-            # Fork subagents: commit dirty worktree so branch tips are
-            # mergeable before exposing a completed task result.
-            if fork_project_dir and fork_worktree_branch:
-                finalize_started = True
-                try:
-                    finalized = await _finalize_background_fork(
-                        fork_project_dir,
-                        fork_worktree_branch,
-                        scope_id=fork_scope_id,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Background fork finalize failed for %s (%s)",
-                        sanitize_log_value(fork_worktree_branch),
-                        sanitize_log_value(fork_project_dir),
-                        exc_info=True,
-                    )
-                    await _mark_background_fork_failed(
-                        fork_project_dir,
-                        fork_worktree_branch,
-                        scope_id=fork_scope_id,
-                        reason="Fork finalization raised an exception",
-                        context="finalize error",
-                    )
-                    finalized = False
-                if not finalized:
-                    bg.status = "finished"
-                    bg.finished_at = time.time()
-                    bg.result = {
-                        "status": "failed",
-                        "error": {
-                            "message": "Failed to finalize fork worktree",
-                        },
-                    }
-                    return
         except asyncio.CancelledError:
             if is_new_run:
                 await tracker.request_stop(chat.id)
@@ -986,16 +794,6 @@ async def post_console_chat_task(
                 "status": "failed",
                 "error": cancel_error,
             }
-            # In-flight Git finalize is detached bookkeeping; do not race
-            # it with mark_fork_failed or let it flip this result later.
-            if not finalize_started:
-                await _mark_background_fork_failed(
-                    fork_project_dir,
-                    fork_worktree_branch,
-                    scope_id=fork_scope_id,
-                    reason=str(cancel_error["message"]),
-                    context="cancel",
-                )
             return
         except Exception as exc:
             bg.status = "finished"
@@ -1004,13 +802,6 @@ async def post_console_chat_task(
                 "status": "failed",
                 "error": {"message": str(exc)},
             }
-            await _mark_background_fork_failed(
-                fork_project_dir,
-                fork_worktree_branch,
-                scope_id=fork_scope_id,
-                reason=str(exc),
-                context="task error",
-            )
             return
 
         bg.status = "finished"

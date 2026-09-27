@@ -3,8 +3,8 @@
 
 Public surface:
     ResourceGovernor  — Core entry point (assert_policy / audit etc.)
-    GovernanceAction  — Rule action (ALLOW / DENY / ASK / SANDBOX_FALLBACK)
-    GovernanceDecision — Decision result with action + reason + sandbox_config
+    GovernanceAction  — Rule action (ALLOW / DENY / ASK)
+    GovernanceDecision — Decision result with action + reason
     PolicyGuardedTool  — Tool wrapper that enforces governance
 """
 

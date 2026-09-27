@@ -19,10 +19,8 @@ import type { Route } from "../../plugins/registry/types";
 
 // Lazy pages
 const ChatPage = lazyImportWithRetry("../../pages/Chat");
-const ChannelsPage = lazyImportWithRetry("../../pages/Control/Channels");
 const SessionsPage = lazyImportWithRetry("../../pages/Control/Sessions");
 const CronJobsPage = lazyImportWithRetry("../../pages/Control/CronJobs");
-const HeartbeatPage = lazyImportWithRetry("../../pages/Control/Heartbeat");
 const AgentConfigPage = lazyImportWithRetry("../../pages/Agent/Config");
 const SkillsPage = lazyImportWithRetry("../../pages/Agent/Skills");
 const SkillPoolPage = lazyImportWithRetry("../../pages/Settings/SkillPool");
@@ -38,11 +36,7 @@ const OffloadPolicyPage = lazyImportWithRetry(
 const SecurityPage = lazyImportWithRetry("../../pages/Settings/Security");
 const TokenUsagePage = lazyImportWithRetry("../../pages/Settings/TokenUsage");
 const AgentStatsPage = lazyImportWithRetry("../../pages/Settings/AgentStats");
-const VoiceTranscriptionPage = lazyImportWithRetry(
-  "../../pages/Settings/VoiceTranscription",
-);
 const AgentsPage = lazyImportWithRetry("../../pages/Settings/Agents");
-const DebugPage = lazyImportWithRetry("../../pages/Settings/Debug");
 const FilesPage = lazyImportWithRetry("../../pages/Files");
 const SettingsCenterPage = lazyImportWithRetry("../../pages/SettingsCenter");
 
@@ -62,10 +56,8 @@ export const BUILTIN_ROUTES: Route[] = [
     component: SettingsCenterPage,
   },
   { id: "core.files", path: "/files", component: FilesPage },
-  { id: "core.channels", path: "/channels", component: ChannelsPage },
   { id: "core.sessions", path: "/sessions", component: SessionsPage },
   { id: "core.cron-jobs", path: "/cron-jobs", component: CronJobsPage },
-  { id: "core.heartbeat", path: "/heartbeat", component: HeartbeatPage },
   { id: "core.skills", path: "/skills", component: SkillsPage },
   { id: "core.skill-pool", path: "/skill-pool", component: SkillPoolPage },
   { id: "core.tools", path: "/tools", component: ToolsPage },
@@ -90,12 +82,6 @@ export const BUILTIN_ROUTES: Route[] = [
   { id: "core.security", path: "/security", component: SecurityPage },
   { id: "core.token-usage", path: "/token-usage", component: TokenUsagePage },
   { id: "core.agent-stats", path: "/agent-stats", component: AgentStatsPage },
-  {
-    id: "core.voice-transcription",
-    path: "/voice-transcription",
-    component: VoiceTranscriptionPage,
-  },
-  { id: "core.debug", path: "/debug", component: DebugPage },
 ];
 
 routeRegistry.addBuiltin(BUILTIN_ROUTES);

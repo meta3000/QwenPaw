@@ -377,30 +377,6 @@ class DirectoryContextContributor(SyncPromptContributor):
         return block
 
 
-class CodingModeContributor(SyncPromptContributor):
-    """Inject Coding Mode persona block when coding mode is active.
-
-    Only code-specific guidance lives here. The project/workspace paths
-    themselves come from :class:`DirectoryContextContributor`, which
-    runs for every mode.
-    """
-
-    name = "coding_mode"
-    priority = 85
-
-    def contribute_sync(self, ctx: "HookContext") -> str | None:
-        extras = getattr(ctx, "extras", {}) or {}
-        agent_config = extras.get("agent_config")
-        if agent_config is None:
-            return None
-        cm = getattr(agent_config, "coding_mode", None)
-        if not cm or not getattr(cm, "enabled", False):
-            return None
-        from ..modes.coding import _CODING_SYSTEM_PROMPT_TEMPLATE
-
-        return _CODING_SYSTEM_PROMPT_TEMPLATE
-
-
 class ScrollContextContributor(SyncPromptContributor):
     """Inject memory/recall guidance when the scroll context strategy is on."""
 
@@ -494,7 +470,6 @@ _ALL_CONTRIBUTORS = (
     WorkspacePromptFilesContributor,
     MultimodalHintContributor,
     DirectoryContextContributor,
-    CodingModeContributor,
     ScrollContextContributor,
     DriverPolicyHintContributor,
     EnvContextContributor,
@@ -518,7 +493,6 @@ __all__ = [
     "WorkspacePromptFilesContributor",
     "MultimodalHintContributor",
     "DirectoryContextContributor",
-    "CodingModeContributor",
     "ScrollContextContributor",
     "DriverPolicyHintContributor",
     "EnvContextContributor",

@@ -107,10 +107,6 @@ vi.mock("./SliderWithValue", () => ({
   SliderWithValue: () => React.createElement("div"),
 }));
 
-vi.mock("./VisualCompactSettings", () => ({
-  VisualCompactSettings: () => React.createElement("div"),
-}));
-
 vi.mock("../index.module.less", () => ({
   default: new Proxy({}, { get: (_t, prop) => String(prop) }),
 }));

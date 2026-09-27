@@ -110,7 +110,7 @@ class PolicyGuardedTool:
 
     Dynamically inherits from FunctionTool, implementing:
     - check_permissions: calls assert_policy() + audit() for policy decision
-    - __call__: overrides to handle sandbox execution + violation retry
+    - __call__: overrides to handle tool execution
 
     .. warning:: Known limitation — dynamic anonymous class
 
@@ -158,7 +158,6 @@ def _policy_tool_init(
     # a network policy while local backends keep the internal policy identity.
     self._qp_policy_name = getattr(func, "_qwenpaw_policy_name", "")
     self._qp_policy_decision = None  # Pre-evaluation result
-    self._qp_sandbox_mode = False  # Whether to execute in sandbox
     self._qp_raw_params = {}  # Set per-call by check_permissions
 
 
@@ -212,60 +211,6 @@ def _build_tc_spec(self: Any) -> ToolCallSpec:
     )
 
 
-def _prepare_off_mode_sandbox(tool: Any, governor: Any) -> None:
-    """Compile+attach a ``sandbox_config`` for fail-closed tools in OFF mode.
-
-    ``approval_level=OFF`` short-circuits the policy pipeline to ALLOW-all,
-    which normally also skips the ``SANDBOX_FALLBACK`` branch that compiles a
-    ``sandbox_config`` (see :func:`_policy_tool_check_permissions`). Sandbox
-    provisioning and user approval are independent concerns: skipping "ask the
-    user" must not skip "run it in a sandbox".
-
-    Only tools flagged ``requires_sandbox`` in the registry are handled — i.e.
-    the REPL, which returns ``DENIED`` without a config. Fail-open shell tools
-    like ``Bash`` are deliberately left untouched: in OFF mode they run
-    unsandboxed by design, and forcing a sandbox on them would silently narrow
-    their filesystem access.
-
-    A no-op (leaving ``sandbox_config=None``) when the sandbox is not usable
-    -- either the platform has no sandbox, or the operator turned the global
-    ``security.sandbox_enabled`` switch off. In both cases such a REPL is
-    never registered in the first place, or it tolerates unsandboxed
-    execution via ``allow_unsandboxed``.
-
-    Uses ``governor.sandbox_usable`` (platform support AND the global switch)
-    rather than the platform-only ``sandbox_available`` probe, so that an
-    explicit ``sandbox_enabled=false`` is honoured on the OFF-mode path just
-    like it is on the normal policy path (see
-    :meth:`ResourceGovernor._sandbox_usable`).
-    """
-    # These attributes live on a reusable FunctionTool wrapper, but describe
-    # one invocation only.  Clear any previous decision before consulting the
-    # current switch so a hot toggle (or a failed recompile) cannot reuse a
-    # stale sandbox config from an earlier call.
-    for attr in ("_qp_sandbox_mode", "_qp_sandbox_config"):
-        if hasattr(tool, attr):
-            delattr(tool, attr)
-
-    if governor is None:
-        return
-    policy_name = _policy_tool_name(tool)
-    if not DEFAULT_REGISTRY.requires_sandbox(policy_name):
-        return
-    if not getattr(governor, "sandbox_usable", False):
-        return
-    try:
-        tc_spec = tool._build_tc_spec()
-        tool._qp_sandbox_config = governor.compile_sandbox_config(tc_spec)
-        tool._qp_sandbox_mode = True
-    except Exception:
-        # Leave sandbox_config unset; the tool's own fail-closed guard still
-        # protects us — better a clean denial than an unsandboxed run.
-        logger.exception(
-            "OFF-mode sandbox_config compilation failed for '%s'.",
-            getattr(tool, "name", "Unknown"),
-        )
-
 
 # pylint: disable=too-many-return-statements,too-many-branches
 async def _policy_tool_check_permissions(
@@ -295,14 +240,7 @@ async def _policy_tool_check_permissions(
     effective_level = _resolve_effective_approval_level(request_ctx)
 
     if effective_level is not None and effective_level.is_disabled():
-        # OFF means "never ask the user" — it does NOT mean "skip the
-        # sandbox". Sandbox isolation is an execution mechanism, not an
-        # approval gate. Fail-closed tools (the REPL) return DENIED without
-        # a sandbox_config, which the guard layer then misreads as a sandbox
-        # violation and escalates to a recurring approval prompt OFF can
-        # never resolve. So we still compile+attach the sandbox here; only
-        # the "ask the user" step is skipped.
-        _prepare_off_mode_sandbox(self, governor)
+        # OFF means "never ask the user" — all tools allowed.
         return PermissionDecision(
             behavior=PermissionBehavior.ALLOW,
             message="governance: approval_level=off, all tools allowed.",
@@ -345,7 +283,6 @@ async def _policy_tool_check_permissions(
     # Cache the decision + tc_spec for __call__ to use
     self._qp_policy_decision = decision
     self._qp_tc_spec = tc_spec
-    self._qp_sandbox_mode = False
 
     if decision.action is GovernanceAction.ALLOW:
         return PermissionDecision(
@@ -356,14 +293,6 @@ async def _policy_tool_check_permissions(
         return PermissionDecision(
             behavior=PermissionBehavior.DENY,
             message=f"governance: '{tc_spec.tool_name}' is denied by policy",
-        )
-    elif decision.action is GovernanceAction.SANDBOX_FALLBACK:
-        # Bash tool with no rule match → allow execution in sandbox
-        self._qp_sandbox_mode = True
-        self._qp_sandbox_config = decision.sandbox_config
-        return PermissionDecision(
-            behavior=PermissionBehavior.ALLOW,
-            message="governance: sandbox fallback.",
         )
     elif decision.action is GovernanceAction.ASK:
         # Requires user confirmation
@@ -390,135 +319,10 @@ async def _policy_tool_call(
     *args: Any,
     **kwargs: Any,
 ) -> Any:
-    """Override FunctionTool.__call__ for sandbox execution + retry.
-
-    If sandbox execution triggers a violation (ToolChunk state=DENIED),
-    request user approval.
-    If the user approves, retry without sandbox.
-    """
-    sandbox_mode = getattr(self, "_qp_sandbox_mode", False)
-    if sandbox_mode:
-        sandbox_config = getattr(self, "_qp_sandbox_config", None)
-        if sandbox_config is not None:
-            kwargs["sandbox_config"] = sandbox_config
-
-    # Call the original function
+    """Override FunctionTool.__call__ for tool execution."""
     from agentscope.tool import FunctionTool
-    from agentscope.message import ToolResultState
 
-    result = await FunctionTool.__call__(self, *args, **kwargs)
-
-    # Check if sandbox violation was returned (state=DENIED)
-    if not (
-        isinstance(result, ToolChunk)
-        and result.state == ToolResultState.DENIED
-    ):
-        return result
-
-    # Extract violation message from metadata or content
-    violation_msg = ""
-    if hasattr(result, "metadata") and result.metadata:
-        violation_msg = result.metadata.get("sandbox_violation", "")
-    if not violation_msg:
-        # Fallback: extract from content text
-        for block in result.content or []:
-            if hasattr(block, "text") and "Sandbox violation:" in block.text:
-                violation_msg = (
-                    block.text.split("Sandbox violation:", 1)[1]
-                    .split("\n")[0]
-                    .strip()
-                )
-                break
-
-    logger.info(
-        "PolicyGuardedTool: sandbox violation for '%s': %s",
-        getattr(self, "name", "Unknown"),
-        violation_msg,
-    )
-
-    governor = getattr(self, "_qp_governor", None)
-    request_context = getattr(self, "_qp_request_context", {}) or {}
-
-    if governor is None:
-        # No governor, can't approve — return the violation as DENIED
-        return ToolChunk(
-            is_last=True,
-            state=ToolResultState.DENIED,
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Sandbox violation: {violation_msg}\n"
-                    f"Command was blocked by sandbox security policy.",
-                ),
-            ],
-        )
-
-    # Trigger approval flow — reuse tc_spec from check_permissions
-    tc_spec = getattr(self, "_qp_tc_spec", None)
-    if tc_spec is None:
-        # Fallback: reconstruct if check_permissions didn't run
-        self._qp_raw_params = {}
-        tc_spec = self._build_tc_spec()
-
-    governance_reason = getattr(
-        getattr(self, "_qp_policy_decision", None),
-        "reason",
-        None,
-    )
-    governance_source = getattr(
-        getattr(self, "_qp_policy_decision", None),
-        "source",
-        "No rule hit",
-    )
-
-    # Record the ASK escalation (sandbox violation → ask user)
-    governor.audit(
-        tc_spec,
-        GovernanceDecision(
-            action=GovernanceAction.ASK,
-            reason=(
-                f"sandbox violation: {violation_msg}"
-                if violation_msg
-                else "sandbox violation, ask user"
-            ),
-        ),
-    )
-
-    from agentscope.permission import PermissionBehavior
-
-    decision = await _ask_user_approval(
-        governor=governor,
-        tc_spec=tc_spec,
-        request_context=request_context,
-        violation_msg=violation_msg or None,
-        governance_reason=governance_reason,
-        source=governance_source,
-    )
-
-    if decision.behavior == PermissionBehavior.ALLOW:
-        # User approved: retry without sandbox
-        logger.info(
-            "PolicyGuardedTool: user approved sandbox violation, "
-            "retrying without sandbox for '%s'",
-            getattr(self, "name", "Unknown"),
-        )
-        kwargs.pop("sandbox_config", None)
-        self._qp_sandbox_mode = False
-        return await FunctionTool.__call__(self, *args, **kwargs)
-    else:
-        # User denied: return the violation as DENIED
-        return ToolChunk(
-            is_last=True,
-            state=ToolResultState.DENIED,
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Sandbox violation: {violation_msg}\n"
-                    f"Command was blocked and user denied approval.\n\n"
-                    f"{_NO_RETRY_INSTRUCTION}",
-                ),
-            ],
-        )
+    return await FunctionTool.__call__(self, *args, **kwargs)
 
 
 # ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ from agentscope.message import ToolCallBlock
 from agentscope.model import OpenAIChatModel
 from agentscope.model._model_response import ChatResponse
 
-from qwenpaw.local_models.tag_parser import (
+from qwenpaw.utils.tag_parser import (
     parse_tool_calls_from_text,
     text_contains_tool_call_tag,
 )

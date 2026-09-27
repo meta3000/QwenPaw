@@ -11,9 +11,7 @@ import {
   type Session,
 } from "./components";
 import { useSessions } from "./useSessions";
-import api from "../../../api";
 import { PageHeader } from "@/components/PageHeader";
-import { ChannelIcon } from "../Channels/components";
 import styles from "./index.module.less";
 
 function SessionsPage() {
@@ -44,9 +42,7 @@ function SessionsPage() {
 
   // Filter states
   const [filterUserId, setFilterUserId] = useState<string>("");
-  const [filterChannel, setFilterChannel] = useState<string>("");
   const [filterTitle, setFilterTitle] = useState<string>("");
-  const [availableChannels, setAvailableChannels] = useState<string[]>([]);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -61,18 +57,6 @@ function SessionsPage() {
 
   const { message } = useAppMessage();
 
-  useEffect(() => {
-    const fetchChannelTypes = async () => {
-      try {
-        const types = await api.listChannelTypes();
-        setAvailableChannels(types);
-      } catch (error) {
-        console.error("Failed to load channel types:", error);
-      }
-    };
-    fetchChannelTypes();
-  }, []);
-
   // Filter effect
   useEffect(() => {
     let filtered: Session[] = sessions;
@@ -84,12 +68,6 @@ function SessionsPage() {
       );
     }
 
-    if (filterChannel) {
-      filtered = filtered.filter(
-        (session: Session) => session.channel === filterChannel,
-      );
-    }
-
     if (deferredTitle) {
       filtered = filtered.filter((session: Session) => {
         const name = session.name || "";
@@ -98,7 +76,7 @@ function SessionsPage() {
     }
 
     setFilteredSessions(filtered);
-  }, [sessions, filterUserId, filterChannel, deferredTitle]);
+  }, [sessions, filterUserId, deferredTitle]);
 
   // Clear selection when switching tabs
   useEffect(() => {
@@ -225,11 +203,8 @@ function SessionsPage() {
             <FilterBar
               isMobile={isMobile}
               filterUserId={filterUserId}
-              filterChannel={filterChannel}
               filterTitle={filterTitle}
-              uniqueChannels={availableChannels}
               onUserIdChange={setFilterUserId}
-              onChannelChange={setFilterChannel}
               onTitleChange={setFilterTitle}
             />
             {selectedRowKeys.length > 0 && (
@@ -285,9 +260,6 @@ function SessionsPage() {
               <div className={styles.mobileSessionHeader}>
                 <span className={styles.mobileSessionName}>
                   {session.name || session.id}
-                </span>
-                <span className={styles.mobileSessionChannel}>
-                  <ChannelIcon channelKey={session.channel} size={24} />
                 </span>
               </div>
               <div className={styles.mobileSessionMeta}>

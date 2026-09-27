@@ -36,7 +36,6 @@ import {
 } from "../../utils/clientMessageId";
 import defaultConfig, { getDefaultConfig } from "./OptionsPanel/defaultConfig";
 import { chatApi } from "../../api/modules/chat";
-import { agentApi } from "../../api/modules/agent";
 import { skillApi } from "../../api/modules/skill";
 import { getApiUrl } from "../../api/config";
 import { buildAuthHeaders } from "../../api/authHeaders";
@@ -187,10 +186,6 @@ function resolveBackendChatId(chatId?: string | null): string | undefined {
     ? chatId
     : undefined;
 }
-
-import WhisperSpeechButton, {
-  WhisperSpeechButtonRef,
-} from "./components/WhisperSpeechButton";
 
 import {
   toDisplayUrl,
@@ -1997,33 +1992,6 @@ export default function ChatPage() {
   }, [fetchMultimodalCaps]);
 
   const pendingClearHistoryRef = useRef(false);
-  const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
-  const [whisperEnabled, setWhisperEnabled] = useState(false);
-  const [whisperChecked, setWhisperChecked] = useState(false);
-
-  // Check if Whisper transcription is configured
-  useEffect(() => {
-    agentApi
-      .getTranscriptionProviderType()
-      .then((res) => {
-        setWhisperEnabled(res.transcription_provider_type !== "disabled");
-      })
-      .catch(() => setWhisperEnabled(false))
-      .finally(() => setWhisperChecked(true));
-  }, []);
-
-  const handleWhisperTranscription = useCallback((text: string) => {
-    const senderContainer = document.querySelector('[class*="sender"]');
-    const textarea = senderContainer?.querySelector(
-      "textarea",
-    ) as HTMLTextAreaElement | null;
-    if (textarea) {
-      const currentValue = textarea.value || "";
-      const newValue = currentValue ? `${currentValue} ${text}` : text;
-      setTextareaValue(textarea, newValue);
-      textarea.focus();
-    }
-  }, []);
 
   useMessageHistoryNavigation(chatRef, isChatActive, isComposingRef);
   useChatInputDraft(isChatActive, selectedAgent);
@@ -2441,14 +2409,11 @@ export default function ChatPage() {
         e.key.toLowerCase() === "m"
       ) {
         e.preventDefault();
-        if (whisperEnabled) {
-          whisperSpeechRef.current?.toggleRecording();
-        }
       }
     };
     document.addEventListener("keydown", handleShortcut);
     return () => document.removeEventListener("keydown", handleShortcut);
-  }, [isChatActive, whisperEnabled]);
+  }, [isChatActive]);
   chatIdRef.current = chatId;
   navigateRef.current = navigate;
 
@@ -3470,7 +3435,7 @@ export default function ChatPage() {
       sender: {
         ...(i18nConfig as any)?.sender,
         beforeSubmit: handleBeforeSubmit,
-        allowSpeech: whisperChecked && !whisperEnabled,
+        allowSpeech: true,
         beforeUI: showSenderBeforeUI ? (
           <>
             {isQueueOnlyTab && (
@@ -3497,12 +3462,6 @@ export default function ChatPage() {
         ) : undefined,
         prefix: (
           <>
-            {whisperEnabled ? (
-              <WhisperSpeechButton
-                ref={whisperSpeechRef}
-                onTranscription={handleWhisperTranscription}
-              />
-            ) : null}
             {usesQwenPawBackend && (
               <LoopModeSelector
                 className={isMobile ? styles.mobileComposerControl : undefined}
@@ -3865,9 +3824,6 @@ export default function ChatPage() {
     activeSessionId,
     queueSessionId,
     onFileCardClick,
-    whisperChecked,
-    whisperEnabled,
-    handleWhisperTranscription,
     isWideMode,
     hasQueueItems,
     isQueueOnlyTab,

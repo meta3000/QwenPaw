@@ -15,10 +15,6 @@ before ``tool.func()``, so individual tools don't need to.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .sandbox import Sandbox
 
 
 class WorkspaceManager:

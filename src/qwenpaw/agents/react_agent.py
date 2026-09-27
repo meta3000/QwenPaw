@@ -33,7 +33,6 @@ from .context.base import ContextManager
 from .skill_system import get_workspace_skills_dir
 from .utils.image_freezing import freeze_local_images_async
 from .utils.message_request_normalizer import _is_media_block
-from ..modes.coding import CodingModeMixin
 from ..utils.io_utils import run_sync_io
 from ..constant import (
     LOOP_CONTINUATION_MESSAGE_TAG,
@@ -147,7 +146,7 @@ def _effective_artifact_retention_days(light_context_config: Any) -> int:
     )
 
 
-class QwenPawAgent(CodingModeMixin, Agent):
+class QwenPawAgent(Agent):
     """QwenPaw Agent with integrated tools, skills, and memory management.
 
     This agent extends agentscope 2.0 ``Agent`` with:
@@ -156,7 +155,6 @@ class QwenPawAgent(CodingModeMixin, Agent):
     - Memory management with auto-compaction
     - Bootstrap guidance for first-time setup
     - Tool-guard security (via ``PolicyGuardedTool.check_permissions``)
-    - Coding Mode features: Inline Diff (via CodingModeMixin)
     """
 
     def __init__(

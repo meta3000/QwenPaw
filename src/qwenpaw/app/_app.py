@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from ..__version__ import __version__
 from ..config import load_config  # pylint: disable=no-name-in-module
-from ..config.utils import get_config_path, read_last_api
+from ..config.utils import get_config_path, read_last_api, write_last_api
 from ..constant import (
     CORS_ORIGINS,
     DOCS_ENABLED,
@@ -27,11 +27,11 @@ from ..constant import (
     WORKING_DIR,
 )
 from ..envs import load_envs_into_environ
-from ..local_models.manager import LocalModelManager
 from ..providers.provider_manager import ProviderManager
 from ..utils.io_utils import run_sync_io
 from ..utils.logging import (
     LOG_FILE_PATH,
+    SuppressPathAccessLogFilter,
     add_project_file_handler,
     setup_logger,
 )
@@ -42,6 +42,7 @@ from .auth import (
     RuntimeBoundaryMiddleware,
     auto_register_from_env,
     check_proxy_config_sanity,
+    is_auth_enabled,
 )
 from .exception_handlers import register_exception_handlers
 from .migration import (
@@ -146,9 +147,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
 
     # Provider initialization scans and may migrate persisted configuration.
     provider_manager = await asyncio.to_thread(ProviderManager.get_instance)
-    local_model_manager = await asyncio.to_thread(
-        LocalModelManager.get_instance,
-    )
 
     # --- AppServiceManager + WorkspaceRegistry ---
     app_services = None
@@ -275,7 +273,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
     # routers / agent_context that read app.state.multi_agent_manager.
     app.state.multi_agent_manager = workspace_registry
     app.state.provider_manager = provider_manager
-    app.state.local_model_manager = local_model_manager
     app.state.plugin_loader = None
     app.state.plugin_registry = None
 
@@ -360,7 +357,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             elif app.state.startup_ready.is_set():
                 startup_display.mark_finalizing()
 
-            provider_manager.start_local_model_resume(local_model_manager)
             startup_provider_ids = provider_manager.startup_sync_provider_ids()
             asyncio.create_task(
                 provider_manager.sync_startup_provider_models(
@@ -554,19 +550,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
                         exc_info=True,
                     )
 
-        local_model_mgr = getattr(app.state, "local_model_manager", None)
-        if local_model_mgr is not None:
-            logger.info("Stopping local model server...")
-            try:
-                await local_model_mgr.shutdown_server()
-            except Exception as exc:
-                logger.error(
-                    "Error shutting down local model server gracefully: %s",
-                    exc,
-                )
-                with suppress(OSError, RuntimeError, ValueError):
-                    local_model_mgr.shutdown_server_sync()
-
         # Stop AppServiceManager (ToolCoordinator shutdown, etc.)
         _app_svc = getattr(app.state, "app_services", None)
         if _app_svc is not None:
@@ -608,19 +591,6 @@ async def lifespan(  # pylint: disable=too-many-statements,too-many-branches
             _stop_token_usage(),
             _close_hub(),
         )
-
-        # Destroy Windows sandbox artifacts (user accounts, profiles, ACLs,
-        # firewall rules). Runs in a thread because it invokes subprocess
-        # calls (takeown, icacls, net user, powershell) that may block.
-        if sys.platform == "win32":
-            try:
-                from ..sandbox import shutdown_all_sandboxes
-
-                logger.info("Cleaning up Windows sandbox artifacts...")
-                await asyncio.to_thread(shutdown_all_sandboxes)
-                logger.info("Windows sandbox cleanup complete.")
-            except Exception as e:
-                logger.error(f"Error during sandbox cleanup: {e}")
 
         logger.info("Application shutdown complete")
         startup_display.stop()
@@ -786,28 +756,148 @@ if os.path.isdir(_CONSOLE_STATIC_DIR):
         _ = full_path
         return _serve_console_index()
 
-    # SPA fallback: catch-all route for frontend routing
-    # Must be registered AFTER all API routes to avoid conflicts
-    @app.get(
-        "/{full_path:path}",
-        name="qwenpaw_console_spa_catchall",
+
+# ── Server entry point (replaces cli/app_cmd.py) ──────────────────────
+
+
+def _format_bind_address(host: str, port: int) -> str:
+    """Return a readable bind address for startup logs."""
+    normalized_host = host.strip()
+    if ":" in normalized_host and not normalized_host.startswith("["):
+        normalized_host = f"[{normalized_host}]"
+    return f"{normalized_host}:{port}"
+
+
+def _warn_if_auth_off_non_loopback_bind(host: str, port: int) -> None:
+    """Warn when QwenPaw is reachable beyond loopback without auth."""
+    from .auth import is_auth_enabled
+    from ..utils.http import is_loopback_host
+
+    if is_auth_enabled() or is_loopback_host(host):
+        return
+
+    bind_address = _format_bind_address(host, port)
+    warning = (
+        "\n============================================================\n"
+        f"SECURITY NOTICE: QwenPaw is bound to {bind_address} without "
+        "authentication.\n\n"
+        "Anyone who can reach this address may access QwenPaw APIs "
+        "without login.\n\n"
+        "Recommended:\n"
+        "  - Restrict access to a trusted network interface or protected "
+        "environment.\n"
+        "  - Enable authentication with QWENPAW_AUTH_ENABLED=true if "
+        "untrusted users or\n"
+        "    processes may reach this address.\n"
+        "============================================================"
     )
-    def _console_spa(full_path: str):
-        # Prevent catching common system/special paths
-        if full_path in ("docs", "redoc", "openapi.json"):
-            raise HTTPException(status_code=404, detail="Not Found")
-        # Skip API routes (should already be matched due to registration order)
-        if full_path.startswith("api/") or full_path == "api":
-            raise HTTPException(status_code=404, detail="Not Found")
+    if logger.isEnabledFor(logging.WARNING):
+        logger.warning("%s", warning)
+    else:
+        print(warning, file=sys.stderr)
 
-        # Serve static files from the console build directory (e.g. logo SVGs,
-        # favicons, images placed in public/).  Only serve regular files whose
-        # path does not escape the console directory.
-        if full_path and ".." not in full_path:
-            # Security: Reject absolute paths to prevent path traversal bypass
-            if not Path(full_path).is_absolute():
-                static_file = _console_path / full_path
-                if static_file.is_file():
-                    return FileResponse(static_file)
 
-        return _serve_console_index()
+def run_server(
+    host: str = "127.0.0.1",
+    port: int = 8088,
+    *,
+    reload: bool = False,
+    log_level: str = "info",
+    hide_access_paths: tuple[str, ...] = (
+        "/console/push-messages",
+        "/console/inbox/events",
+    ),
+) -> None:
+    """Configure the server process and start uvicorn."""
+    import logging as _logging
+
+    from ..config.utils import write_last_api
+    from ..constant import LOG_LEVEL_ENV
+    from ..utils.http import probe_host_for_bind_host
+    from ..utils.logging import SuppressPathAccessLogFilter, setup_logger
+
+    write_last_api(probe_host_for_bind_host(host), port)
+    os.environ[LOG_LEVEL_ENV] = log_level
+    if reload:
+        os.environ["QWENPAW_RELOAD_MODE"] = "1"
+
+    setup_logger(log_level)
+
+    paths = [p for p in hide_access_paths if p]
+    if paths:
+        _logging.getLogger("uvicorn.access").addFilter(
+            SuppressPathAccessLogFilter(paths),
+        )
+
+    _warn_if_auth_off_non_loopback_bind(host, port)
+
+    import uvicorn
+
+    uvicorn.run(
+        "qwenpaw.app._app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        workers=1,
+        log_level=log_level,
+        timeout_graceful_shutdown=5,
+        ws_max_size=64 * 1024 * 1024,
+    )
+
+
+def main() -> None:
+    """CLI entry point: parse args and start the server."""
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog="qwenpaw",
+        description="QwenPaw API Server",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Bind host (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8088,
+        help="Bind port (default: 8088)",
+    )
+    parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload (dev only)",
+    )
+    parser.add_argument(
+        "--log-level",
+        default="info",
+        choices=["critical", "error", "warning", "info", "debug", "trace"],
+        help="Log level (default: info)",
+    )
+    parser.add_argument(
+        "--hide-access-paths",
+        action="append",
+        default=None,
+        help="Path substrings to hide from access log (repeatable)",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"QwenPaw {__version__}",
+    )
+
+    args = parser.parse_args()
+
+    hide_paths = tuple(args.hide_access_paths) if args.hide_access_paths else (
+        "/console/push-messages",
+        "/console/inbox/events",
+    )
+
+    run_server(
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+        log_level=args.log_level,
+        hide_access_paths=hide_paths,
+    )

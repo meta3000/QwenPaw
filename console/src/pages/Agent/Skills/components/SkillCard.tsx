@@ -58,7 +58,6 @@ export const getFileIcon = (filePath: string) => {
     "file_reader",
     "browser",
     "guidance",
-    "dingtalk_channel",
   ]);
 
   if (textSkillIcons.has(skillKey)) {

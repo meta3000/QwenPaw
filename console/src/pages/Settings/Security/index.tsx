@@ -22,14 +22,6 @@ function SecurityPage() {
     config,
     enabled,
     setEnabled,
-    sandboxEnabled,
-    setSandboxEnabled,
-    sandboxReason,
-    denyPathsActive,
-    denyPathsLoading,
-    denyPathsProtectedPaths,
-    denyPathsPlatformSupported,
-    toggleDenyPaths,
     toolOptions,
     saving,
     handleSave,
@@ -111,9 +103,6 @@ function SecurityPage() {
                   config={config}
                   enabled={enabled}
                   setEnabled={setEnabled}
-                  sandboxEnabled={sandboxEnabled}
-                  setSandboxEnabled={setSandboxEnabled}
-                  sandboxReason={sandboxReason}
                   toolOptions={toolOptions}
                   mergedRules={mergedRules}
                   toggleRule={toggleRule}
@@ -142,13 +131,6 @@ function SecurityPage() {
                     </p>
                     <FileGuardSection
                       onSave={onFileGuardHandlersReady}
-                      denyPathsActive={denyPathsActive}
-                      denyPathsLoading={denyPathsLoading}
-                      denyPathsProtectedPaths={denyPathsProtectedPaths}
-                      denyPathsPlatformSupported={denyPathsPlatformSupported}
-                      sandboxEnabled={sandboxEnabled}
-                      sandboxReason={sandboxReason}
-                      toggleDenyPaths={toggleDenyPaths}
                     />
                   </div>
                 </div>

@@ -12,15 +12,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable
+from typing import Any, Iterable
 
 from ..utils.io_utils import run_sync_io
 from ..utils.logging import sanitize_log_value
-
-if TYPE_CHECKING:
-    from ..agents.context.visual_compression.runtime.recovery import (
-        TurnRecoveryStore,
-    )
 
 _logger = logging.getLogger(__name__)
 
@@ -424,27 +419,7 @@ class AgentBuilder:
             local_ws.set_governor(governor)
 
         # Toolkit.
-        from ..agents.context.visual_compression.runtime.recovery import (
-            TurnRecoveryStore,
-        )
-
-        visual_recovery_store = TurnRecoveryStore()
-        extra_tools = self._collect_coding_mode_tools(
-            agent_config,
-            workspace_dir,
-            agent_id,
-            request_context,
-            governor,
-        )
-        extra_tools.extend(
-            self._collect_visual_compression_tools(
-                agent_config,
-                agent_id,
-                request_context,
-                governor,
-                visual_recovery_store,
-            ),
-        )
+        extra_tools: list[Any] = []
         (
             driver_tools,
             driver_prompt_hints,
@@ -480,18 +455,17 @@ class AgentBuilder:
             offloader=offloader,
         )
         # Eviction and recall must live or die together. The structured
-        # recall_history tool reads history in-process (no sandbox needed),
-        # but it is still guard-wrapped — with no governor the guard layer
-        # itself is degraded. Keep the conservative gate: if the governor
-        # never came up and the operator hasn't opted into unsandboxed
-        # recall, degrade to native so the full history stays in-context.
+        # recall_history tool reads history in-process, but it is still
+        # guard-wrapped. Keep the conservative gate: if the governor
+        # never came up, degrade to native so the full history stays
+        # in-context.
         if scroll is not None and not self._scroll_recall_runnable(
             agent_config,
             governor,
         ):
             _logger.warning(
-                "scroll: recall tools cannot run (governor unavailable and "
-                "allow_unsandboxed is off) — falling back to native context "
+                "scroll: recall tools cannot run (governor unavailable) "
+                "— falling back to native context "
                 "management so evicted history stays accessible",
             )
             scroll = None
@@ -535,7 +509,6 @@ class AgentBuilder:
         middlewares = self._build_middlewares(
             ctx,
             agent_config,
-            visual_recovery_store,
         )
 
         running_config = agent_config.running
@@ -665,7 +638,7 @@ class AgentBuilder:
 
         ``coding_project_dir`` is the PRIMARY project directory;
         ``extra_project_dirs`` are the remaining bound directories, all
-        of which get ALLOW rules and sandbox mounts.
+        of which get ALLOW rules.
 
         Returns the started governor, or ``None`` when governance cannot
         be initialised (missing dependencies, unsupported platform, etc.).
@@ -798,40 +771,11 @@ class AgentBuilder:
         if stamped is not None:
             return stamped
 
-        from ..agents.fork_project import resolve_allowed_fork_project_dir
-
         raw_project_dir = request_context.get("active_mode_project_dir")
         if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
             raw_project_dir = request_context.get("project_dir")
-        fork_raw = request_context.get("fork_project_dir")
-        if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
-            # spawn_subagent(fork=True) places the worktree here.
-            raw_project_dir = fork_raw
         if not isinstance(raw_project_dir, str) or not raw_project_dir.strip():
             return agent_config
-
-        # When fork_project_dir is present, the final project directory MUST be
-        # the validated worktree — never fall through to an unchecked ACP path.
-        if isinstance(fork_raw, str) and fork_raw.strip():
-            existing_pd = getattr(agent_config, "project_dir", None)
-            workspace_hint = request_context.get("workspace_dir") or getattr(
-                agent_config,
-                "workspace_dir",
-                None,
-            )
-            validated = resolve_allowed_fork_project_dir(
-                fork_raw,
-                workspace_dir=workspace_hint,
-                project_dirs=[existing_pd] if existing_pd else None,
-            )
-            if validated is None:
-                _logger.warning(
-                    "Rejecting fork_project_dir outside allowed worktree "
-                    "subtree: %s",
-                    sanitize_log_value(fork_raw),
-                )
-                return agent_config
-            raw_project_dir = str(validated)
 
         project_dir = Path(raw_project_dir).expanduser().resolve()
         if not project_dir.is_dir():
@@ -877,23 +821,6 @@ class AgentBuilder:
                 _project_dir = None
         else:
             _project_dir = getattr(agent_config, "project_dir", None) or ws
-            # Prefer validated fork worktree as the shell/file dir.
-            _payload = (
-                getattr(request, "request_context", None) if request else None
-            )
-            if isinstance(_payload, dict):
-                from ..agents.fork_project import (
-                    resolve_allowed_fork_project_dir,
-                )
-
-                _fork = resolve_allowed_fork_project_dir(
-                    _payload.get("fork_project_dir"),
-                    workspace_dir=workspace_dir,
-                    project_dirs=[_project_dir] if _project_dir else None,
-                )
-                if _fork is not None:
-                    ws = str(_fork)
-                    _project_dir = str(_fork)
         _configured_shell = getattr(
             getattr(agent_config, "running", None),
             "shell_command_executable",
@@ -921,59 +848,6 @@ class AgentBuilder:
             project_dir=_project_dir,
             active_model_name=_model_name,
         )
-
-    @staticmethod
-    def _collect_coding_mode_tools(
-        agent_config: Any,
-        workspace_dir: Any,
-        agent_id: str,
-        request_context: dict[str, Any],
-        governor: Any = None,
-    ) -> list[Any]:
-        from ..modes.coding import collect_coding_tools
-
-        return collect_coding_tools(
-            agent_config,
-            workspace_dir,
-            agent_id=agent_id,
-            request_context=request_context,
-            governor=governor,
-        )
-
-    @staticmethod
-    def _collect_visual_compression_tools(
-        agent_config: Any,
-        agent_id: str,
-        request_context: dict[str, Any],
-        governor: Any = None,
-        recovery_store: TurnRecoveryStore | None = None,
-    ) -> list[Any]:
-        """Collect the optional visual-context recovery tool."""
-        config = (
-            agent_config.running.light_context_config.visual_compact_config
-        )
-        if not config.enabled:
-            return []
-
-        from ..agents.context.visual_compression.runtime.recovery import (
-            TurnRecoveryStore,
-            make_recover_visual_context_tool,
-        )
-
-        store = (
-            recovery_store
-            if recovery_store is not None
-            else TurnRecoveryStore()
-        )
-        recover_visual_context = make_recover_visual_context_tool(store)
-        return [
-            AgentBuilder._wrap_tool(
-                recover_visual_context,
-                agent_id,
-                request_context,
-                governor,
-            ),
-        ]
 
     @staticmethod
     def _get_driver_prompt_hints(ctx: Any) -> list[str]:
@@ -1103,81 +977,22 @@ class AgentBuilder:
     def _scroll_recall_runnable(agent_config: Any, governor: Any) -> bool:
         """Whether scroll's recall tools can actually execute in this build.
 
-        Two recall paths exist: the structured ``recall_history`` tool
-        (in-process bound queries — needs no sandbox, only a working guard
-        layer) and the sandboxed ``recall_history_python`` REPL, which fails
-        closed unless a ``sandbox_config`` is supplied. That config is
-        injected only by the governor (via ``PolicyGuardedTool``); the
-        ``GuardedFunctionTool`` fallback used when the governor is absent
-        never supplies one. A missing governor means the guard layer itself is
-        degraded, so we stay conservative: recall is runnable iff the governor
-        is present, or the deployment has opted into unsandboxed recall —
-        which requires BOTH the ``QWENPAW_ALLOW_UNSANDBOXED_RECALL`` env var
-        and ``scroll_config.allow_unsandboxed`` (see
-        ``scroll_unsandboxed_allowed`` — agent.json alone can never bypass the
-        sandbox). When neither holds, wiring scroll would evict history that
-        nothing can read back, so the caller degrades to native context
-        management.
+        The structured ``recall_history`` tool needs only a working guard
+        layer. When no governor exists, we degrade to native context
+        management so evicted history stays accessible.
         """
         if governor is not None:
             return True
-        try:
-            from ..agents.context import scroll_unsandboxed_allowed
-
-            sc = agent_config.running.light_context_config.scroll_config
-            return scroll_unsandboxed_allowed(sc)
-        except Exception:
-            return False
+        return False
 
     @staticmethod
     def _scroll_repl_runnable(agent_config: Any, governor: Any) -> bool:
-        """Whether the sandboxed ``recall_history_python`` REPL should be
-        offered to the model in this build.
+        """Whether the ``recall_history_python`` REPL should be offered.
 
-        The REPL runs model-authored Python and so needs a sandbox. It is
-        worth registering only when one is actually usable — meaning the
-        governor's platform probe found a sandbox AND the global sandbox
-        switch is enabled — or when the operator explicitly opted into
-        unsandboxed recall (both the
-        ``QWENPAW_ALLOW_UNSANDBOXED_RECALL`` env var and
-        ``scroll_config.allow_unsandboxed``, via
-        ``scroll_unsandboxed_allowed``).
-
-        When neither holds, every call would fail closed, and the guard layer
-        misreads that ``DENIED`` as a sandbox violation and escalates to a
-        recurring approval prompt. So we omit the REPL and let the model recall
-        through the structured ``recall_history`` tool, which needs no sandbox.
-        This is narrower than
-        :meth:`_scroll_recall_runnable`, which gates whether scroll is wired at
-        all; here scroll is already wired and structured recall is present.
-
-        Note: this is a build-time decision. Registration is evaluated once
-        when the agent is built; toggling ``security.sandbox_enabled`` at
-        runtime does NOT add or remove the REPL from an already-running
-        agent. The switch is still honoured on the execution path
-        (``_prepare_off_mode_sandbox`` / ``_sandbox_usable``) -- an already
-        registered REPL will simply skip sandbox provisioning once the switch
-        is off. Rebuild the agent to change which tools are offered.
+        The REPL runs model-authored Python and needs sandbox isolation.
+        Sandbox has been removed, so the REPL is never registered.
         """
-        if governor is not None:
-            sandbox_usable = getattr(governor, "sandbox_usable", None)
-            if sandbox_usable is None:
-                # Compatibility for lightweight/custom governor objects that
-                # predate the effective-usability property.
-                sandbox_usable = getattr(
-                    governor,
-                    "sandbox_available",
-                    False,
-                )
-            if sandbox_usable:
-                return True
-        try:
-            from ..agents.context import scroll_unsandboxed_allowed
-
-            sc = agent_config.running.light_context_config.scroll_config
-            return scroll_unsandboxed_allowed(sc)
-        except Exception:
-            return False
+        return False
 
     def _append_scroll_recall_tools(
         self,
@@ -1192,15 +1007,7 @@ class AgentBuilder:
 
         The structured ``recall_history`` tool is ALWAYS registered: its
         expand/search/recall_tool ops are bound read-only queries (internal
-        governance type) — no sandbox, no approval, working on every platform.
-
-        The sandboxed ``recall_history_python`` REPL is registered ONLY when
-        it can actually run in a sandbox (or unsandboxed recall is explicitly
-        opted in). Where no sandbox exists, or an OFF-mode path skips sandbox
-        compilation, every call would fail closed, and the guard layer misreads
-        that ``DENIED`` as a sandbox violation and turns it into a recurring
-        approval prompt. Omitting it removes that dead-end: the model recalls
-        through the structured tool.
+        governance type). The REPL is never registered (sandbox removed).
         """
         extra_tools.append(
             self._wrap_tool(
@@ -1322,7 +1129,6 @@ class AgentBuilder:
     def _build_middlewares(
         ctx: Any,
         agent_config: Any,
-        visual_recovery_store: TurnRecoveryStore | None = None,
     ) -> list[Any]:
         """Build middleware list.
 
@@ -1330,7 +1136,6 @@ class AgentBuilder:
         1. ToolResultPruningMiddleware — tiered tool result pruning
         2. ToolCoordinatorMiddleware — tool call lifecycle management
         3. Plugin-registered middlewares (sorted by priority)
-        4. VisualCompressionMiddleware — innermost pre-provider transform
         """
         mws: list[Any] = []
 
@@ -1417,22 +1222,6 @@ class AgentBuilder:
                     reg.plugin_id,
                     exc_info=True,
                 )
-
-        # Visual compression is a request-boundary middleware. It reads the
-        # validated per-agent config and does not mutate it.
-        from ..agents.context.visual_compression.runtime.middleware import (
-            VisualCompressionMiddleware,
-        )
-
-        visual_config = (
-            agent_config.running.light_context_config.visual_compact_config
-        )
-        mws.append(
-            VisualCompressionMiddleware(
-                visual_config,
-                visual_recovery_store,
-            ),
-        )
 
         return mws
 

@@ -21,7 +21,6 @@ const hoisted = vi.hoisted(() => {
     getToolGuard: vi.fn(),
     getBuiltinRules: vi.fn(),
     updateToolGuard: vi.fn(),
-    updateSandbox: vi.fn(),
   };
   const stableT = (k: string) => k;
   const buildSaveBodyMock = vi.fn(() => ({
@@ -29,12 +28,8 @@ const hoisted = vi.hoisted(() => {
     auto_denied_rules: [],
     shell_evasion_checks: {},
   }));
-  const markSandboxSavedMock = vi.fn();
   const setEnabledMock = vi.fn();
   const fetchAllMock = vi.fn();
-  // Mutable value so individual tests can override savedSandboxEnabled
-  // without needing vi.doMock (which doesn't work after module import).
-  let savedSandboxEnabledValue = false;
   return {
     mockFormInstance,
     mockFormValidateFields,
@@ -44,16 +39,8 @@ const hoisted = vi.hoisted(() => {
     apiMocks,
     stableT,
     buildSaveBodyMock,
-    markSandboxSavedMock,
     setEnabledMock,
     fetchAllMock,
-    savedSandboxEnabledValue,
-    get savedSandboxEnabled() {
-      return savedSandboxEnabledValue;
-    },
-    set savedSandboxEnabled(v: boolean) {
-      savedSandboxEnabledValue = v;
-    },
   };
 });
 
@@ -89,12 +76,6 @@ vi.mock("./useToolGuard", () => ({
     builtinRules: [],
     enabled: true,
     setEnabled: hoisted.setEnabledMock,
-    sandboxEnabled: true,
-    get savedSandboxEnabled() {
-      return hoisted.savedSandboxEnabled;
-    },
-    markSandboxSaved: hoisted.markSandboxSavedMock,
-    setSandboxEnabled: vi.fn(),
     mergedRules: [],
     shellEvasionChecks: {},
     toggleShellEvasionCheck: vi.fn(),
@@ -119,7 +100,6 @@ const {
   messageMock,
   apiMocks,
   fetchAllMock,
-  markSandboxSavedMock,
 } = hoisted;
 
 describe("useSecurityPage", () => {
@@ -132,12 +112,8 @@ describe("useSecurityPage", () => {
     messageMock.success.mockReset();
     messageMock.error.mockReset();
     apiMocks.updateToolGuard.mockReset();
-    apiMocks.updateSandbox.mockReset();
-    apiMocks.updateSandbox.mockResolvedValue({ enabled: true });
     hoisted.buildSaveBodyMock.mockClear();
     hoisted.setEnabledMock.mockClear();
-    markSandboxSavedMock.mockClear();
-    hoisted.savedSandboxEnabled = false;
   });
 
   it("handleSave calls api.updateToolGuard with guarded_tools array and message.success", async () => {
@@ -163,9 +139,6 @@ describe("useSecurityPage", () => {
     expect(body.auto_denied_rules).toEqual([]);
     expect(messageMock.success).toHaveBeenCalledWith("security.saveSuccess");
     expect(hoisted.setEnabledMock).toHaveBeenCalledWith(true);
-    // Sandbox should be saved first (since sandboxEnabled=true !== savedSandboxEnabled=false)
-    expect(apiMocks.updateSandbox).toHaveBeenCalledTimes(1);
-    expect(markSandboxSavedMock).toHaveBeenCalledTimes(1);
   });
 
   it("handleSave sets guarded_tools to null when guardedTools is empty", async () => {
@@ -253,48 +226,5 @@ describe("useSecurityPage", () => {
     expect(setArg.severity).toBe("HIGH");
     expect(setArg.category).toBe("command_injection");
     expect(setArg.patterns).toBe("");
-  });
-
-  it("handleSave skips updateSandbox when sandbox value unchanged", async () => {
-    // Set savedSandboxEnabled === sandboxEnabled (both true)
-    hoisted.savedSandboxEnabled = true;
-    mockFormValidateFields.mockResolvedValue({
-      enabled: true,
-      guarded_tools: ["t1"],
-      denied_tools: [],
-    });
-    apiMocks.updateToolGuard.mockResolvedValue({});
-
-    const { result } = renderHook(() => useSecurityPage());
-
-    await act(async () => {
-      await result.current.handleSave();
-    });
-
-    // Sandbox should NOT be called since value hasn't changed
-    expect(apiMocks.updateSandbox).not.toHaveBeenCalled();
-    // Tool Guard should still be saved
-    expect(apiMocks.updateToolGuard).toHaveBeenCalledTimes(1);
-    expect(messageMock.success).toHaveBeenCalledWith("security.saveSuccess");
-  });
-
-  it("handleSave does not call updateToolGuard when sandbox save fails", async () => {
-    mockFormValidateFields.mockResolvedValue({
-      enabled: true,
-      guarded_tools: ["t1"],
-      denied_tools: [],
-    });
-    apiMocks.updateSandbox.mockRejectedValue(new Error("Network error"));
-
-    const { result } = renderHook(() => useSecurityPage());
-
-    await act(async () => {
-      await result.current.handleSave();
-    });
-
-    // Sandbox fails first, so Tool Guard should NOT be called
-    expect(apiMocks.updateToolGuard).not.toHaveBeenCalled();
-    expect(messageMock.error).toHaveBeenCalledWith("Network error");
-    expect(messageMock.success).not.toHaveBeenCalled();
   });
 });

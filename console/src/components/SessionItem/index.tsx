@@ -13,7 +13,6 @@ import {
   PinOff,
   Trash2,
 } from "lucide-react";
-import { ChannelIcon } from "../../pages/Control/Channels/components";
 import type { ChatStatus } from "../../api/types/chat";
 import type { ChatGroup } from "../../api/types/chat";
 import styles from "./sessionItem.module.less";
@@ -22,8 +21,6 @@ export interface SessionItemProps {
   // -- Data --
   sessionId: string;
   name: string;
-  channelKey?: string;
-  channelLabel?: string;
   chatStatus?: ChatStatus;
   generating?: boolean;
   unseenResult?: boolean;
@@ -54,8 +51,6 @@ export interface SessionItemProps {
 const SessionItem: React.FC<SessionItemProps> = ({
   sessionId,
   name,
-  channelKey,
-  channelLabel,
   chatStatus,
   generating,
   unseenResult = false,
@@ -240,12 +235,6 @@ const SessionItem: React.FC<SessionItemProps> = ({
           <div className={styles.name}>{name || "New Chat"}</div>
         )}
       </div>
-
-      {!editing && channelKey && (
-        <span className={styles.channelTag} title={channelLabel || channelKey}>
-          <ChannelIcon channelKey={channelKey} size={14} />
-        </span>
-      )}
 
       {!editing && (isSubagent || isCron) && (
         <span className={styles.sourceIcon} title={sourceLabel}>

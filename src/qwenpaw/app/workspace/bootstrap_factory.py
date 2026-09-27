@@ -132,12 +132,10 @@ class WorkspaceBootstrapFactory:
             logger.debug("Prompt contributors not available", exc_info=True)
 
         try:
-            from ...modes.coding import CodingMode
             from ...modes.default import DefaultMode
 
             kwargs["builtin_mode_clses"] = [
                 DefaultMode,
-                CodingMode,
             ]
         except Exception:
             logger.debug("Modes not available", exc_info=True)

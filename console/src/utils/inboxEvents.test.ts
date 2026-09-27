@@ -25,7 +25,7 @@ describe("inboxEvents", () => {
 
   it("matches the push-message sources shown by the Inbox", () => {
     expect(
-      ["cron", "heartbeat", "memory", "skill_autoupdate"].every((source) =>
+      ["cron", "memory", "skill_autoupdate"].every((source) =>
         isPushMessageEvent(event(source)),
       ),
     ).toBe(true);

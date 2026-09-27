@@ -64,10 +64,6 @@ export function SessionDrawer({
             <Form.Item label="user_id">
               <Input value={editingSession.user_id} disabled />
             </Form.Item>
-
-            <Form.Item label="channel">
-              <Input value={editingSession.channel} disabled />
-            </Form.Item>
           </>
         )}
       </Form>

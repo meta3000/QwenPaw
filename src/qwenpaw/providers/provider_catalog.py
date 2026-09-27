@@ -6,8 +6,6 @@ from typing import List
 from .anthropic_provider import AnthropicProvider
 from .dashscope_provider import DashScopeProvider
 from .gemini_provider import GeminiProvider
-from .lmstudio_provider import LMStudioProvider
-from .mimo_provider import MiMoProvider
 from .modelscope_provider import ModelScopeProvider
 from .ollama_provider import OllamaProvider
 from .openai_provider import (
@@ -35,6 +33,7 @@ MODELSCOPE_MODELS = _models("MODELSCOPE_MODELS")
 DASHSCOPE_MODELS = _models("DASHSCOPE_MODELS")
 MIMO_TOKENPLAN_MODELS = _models("MIMO_TOKENPLAN_MODELS")
 MIMO_MODELS = _models("MIMO_MODELS")
+
 ALIYUN_TOKENPLAN_MODELS = _models("ALIYUN_TOKENPLAN_MODELS")
 ALIYUN_CODINGPLAN_MODELS = _models("ALIYUN_CODINGPLAN_MODELS")
 ZHIPU_MODELS = _models("ZHIPU_MODELS")
@@ -404,18 +403,6 @@ PROVIDER_GITHUB_MODELS = GitHubModelsProvider(
     },
 )
 
-
-PROVIDER_LMSTUDIO = LMStudioProvider(
-    id="lmstudio",
-    name="LM Studio",
-    is_local=True,
-    base_url="http://localhost:1234/v1",
-    require_api_key=False,
-    api_key_prefix="",
-    support_model_discovery=True,
-    generate_kwargs={"max_tokens": None},
-)
-
 PROVIDER_SILICONFLOW_CN = OpenAIProvider(
     id="siliconflow-cn",
     name="SiliconFlow (China)",
@@ -491,36 +478,10 @@ PROVIDER_VOLCENGINE_CN_AGENTPLAN = OpenAIProvider(
     provider_variant="agent_plan",
 )
 
-PROVIDER_MIMO_TOKENPLAN = OpenAIProvider(
-    id="mimo-tokenplan",
-    name="Xiaomi MiMo Token Plan",
-    base_url="https://token-plan-cn.xiaomimimo.com/v1",
-    api_key_prefix="",
-    models=MIMO_TOKENPLAN_MODELS,
-    freeze_url=True,
-    provider_group="mimo",
-    provider_group_name="Xiaomi MiMo",
-    provider_variant="token_plan",
-)
-
-PROVIDER_MIMO = MiMoProvider(
-    id="mimo",
-    name="Xiaomi MiMo",
-    base_url="https://api.xiaomimimo.com/v1",
-    api_key_prefix="sk-",
-    models=MIMO_MODELS,
-    freeze_url=True,
-    support_model_discovery=True,
-    provider_group="mimo",
-    provider_group_name="Xiaomi MiMo",
-    provider_variant="standard",
-)
-
 
 BUILTIN_PROVIDERS: tuple[Provider, ...] = (
     PROVIDER_QWENPAW,
     PROVIDER_OLLAMA,
-    PROVIDER_LMSTUDIO,
     PROVIDER_OPENROUTER,
     PROVIDER_GITHUB_MODELS,
     PROVIDER_MODELSCOPE,
@@ -551,8 +512,6 @@ BUILTIN_PROVIDERS: tuple[Provider, ...] = (
     PROVIDER_VOLCENGINE_CN,
     PROVIDER_VOLCENGINE_CN_CODINGPLAN,
     PROVIDER_VOLCENGINE_CN_AGENTPLAN,
-    PROVIDER_MIMO_TOKENPLAN,
-    PROVIDER_MIMO,
 )
 
 BUILTIN_PROVIDER_CATALOG_KEYS = {
@@ -583,8 +542,7 @@ BUILTIN_PROVIDER_CATALOG_KEYS = {
     "volcengine-cn": "VOLCENGINE_MODELS",
     "volcengine-cn-codingplan": "VOLCENGINE_CODINGPLAN_MODELS",
     "volcengine-cn-agentplan": "VOLCENGINE_AGENTPLAN_MODELS",
-    "mimo-tokenplan": "MIMO_TOKENPLAN_MODELS",
-    "mimo": "MIMO_MODELS",
+
 }
 
 for _provider in BUILTIN_PROVIDERS:
@@ -605,8 +563,7 @@ __all__ = [
     "KILO_MODELS",
     "KIMI_CODINGPLAN_MODELS",
     "KIMI_MODELS",
-    "MIMO_MODELS",
-    "MIMO_TOKENPLAN_MODELS",
+
     "MINIMAX_MODELS",
     "MODELSCOPE_MODELS",
     "OPENAI_MODELS",
@@ -625,9 +582,7 @@ __all__ = [
     "PROVIDER_KIMI_CN",
     "PROVIDER_KIMI_CODINGPLAN",
     "PROVIDER_KIMI_INTL",
-    "PROVIDER_LMSTUDIO",
-    "PROVIDER_MIMO",
-    "PROVIDER_MIMO_TOKENPLAN",
+
     "PROVIDER_MINIMAX",
     "PROVIDER_MINIMAX_CN",
     "PROVIDER_MODELSCOPE",

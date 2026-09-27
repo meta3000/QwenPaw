@@ -1149,24 +1149,6 @@ class ScrollContextConfig(BaseModel):
     )
 
 
-class VisualCompactConfig(BaseModel):
-    """User-facing visual compact settings."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    enabled: bool = Field(
-        default=False,
-        description="Enable request-time text-to-image compression.",
-    )
-    effort: Literal["low", "medium", "high"] = Field(
-        default="low",
-        description=(
-            "Visual compression intensity. Higher effort places more eligible "
-            "context in each image while preserving the same safety policy."
-        ),
-    )
-
-
 class LightContextConfig(BaseModel):
     """Light context manager configuration."""
 
@@ -1204,9 +1186,6 @@ class LightContextConfig(BaseModel):
     )
     scroll_config: ScrollContextConfig = Field(
         default_factory=ScrollContextConfig,
-    )
-    visual_compact_config: VisualCompactConfig = Field(
-        default_factory=VisualCompactConfig,
     )
 
     @model_validator(mode="after")
@@ -2684,17 +2663,6 @@ class SecurityConfig(BaseModel):
     file_guard: FileGuardConfig = Field(default_factory=FileGuardConfig)
     skill_scanner: SkillScannerConfig = Field(
         default_factory=SkillScannerConfig,
-    )
-    sandbox_enabled: bool = Field(
-        default=False,
-        description=(
-            "Global switch for governance sandbox execution. Defaults to "
-            "False (sandbox off). When True, shell tools with no matching "
-            "rule run inside the sandbox (no user prompt). When False, such "
-            "calls run directly without the sandbox (no prompt). Phase 0-2 "
-            "protections (secret-file / dangerous-command blocking) are "
-            "unaffected either way."
-        ),
     )
     allow_no_auth_hosts: List[str] = Field(
         default_factory=lambda: ["127.0.0.1", "::1"],

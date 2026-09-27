@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router-dom";
 import { ChevronDown, Ellipsis, FolderPlus, Search } from "lucide-react";
 import { SparkNewChatLine } from "@agentscope-ai/icons";
-import { getChannelLabel } from "../pages/Control/Channels/components";
 import {
   getBackendId,
   useSessionListData,
@@ -200,10 +199,6 @@ const VirtualRow = React.memo(function VirtualRow({
   }
 
   const session = row.session;
-  const channelKey = session.channel?.trim() || "";
-  const channelLabel = channelKey
-    ? getChannelLabel(channelKey, data.t)
-    : undefined;
   const isEditing = data.editingSessionId === session.id;
 
   return (
@@ -220,8 +215,6 @@ const VirtualRow = React.memo(function VirtualRow({
         <SessionItem
           sessionId={session.id!}
           name={session.name || "New Chat"}
-          channelKey={channelKey || undefined}
-          channelLabel={channelLabel}
           chatStatus={session.status}
           generating={session.generating}
           unseenResult={data.unseenSessionIds.has(session.id)}

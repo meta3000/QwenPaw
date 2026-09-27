@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   Select,
-  Alert,
 } from "@agentscope-ai/design";
 import { PlusCircleOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -19,9 +18,6 @@ interface ToolGuardTabProps {
   config: ToolGuardConfig | null;
   enabled: boolean;
   setEnabled: (val: boolean) => void;
-  sandboxEnabled: boolean;
-  setSandboxEnabled: (val: boolean) => void;
-  sandboxReason: string | null;
   toolOptions: { label: string; value: string }[];
   mergedRules: MergedRule[];
   toggleRule: (ruleId: string, currentlyDisabled: boolean) => void;
@@ -39,9 +35,6 @@ export function ToolGuardTab({
   config,
   enabled,
   setEnabled,
-  sandboxEnabled,
-  setSandboxEnabled,
-  sandboxReason,
   toolOptions,
   mergedRules,
   toggleRule,
@@ -81,33 +74,6 @@ export function ToolGuardTab({
             >
               <Switch onChange={(val) => setEnabled(val)} />
             </Form.Item>
-            <Form.Item
-              label={t("security.sandboxEnabled")}
-              tooltip={t("security.sandboxEnabledTooltip")}
-            >
-              <Switch
-                checked={sandboxEnabled}
-                onChange={(val) => setSandboxEnabled(val)}
-              />
-            </Form.Item>
-            {sandboxEnabled && sandboxReason === null && (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message={t("security.sandboxElevatedWarning")}
-                description={t("security.sandboxElevatedDescription")}
-              />
-            )}
-            {sandboxEnabled && sandboxReason === "unelevated" && (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message={t("security.sandboxUnelevatedWarning")}
-                description={t("security.sandboxUnelevatedDescription")}
-              />
-            )}
             <div className={styles.toolGuardRow}>
               <Form.Item
                 label={t("security.guardedTools")}

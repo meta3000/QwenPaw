@@ -68,7 +68,7 @@ class AuditEvent:
     session_id: str
     tool_name: str
     target: str
-    decision: str  # "allow" | "deny" | "ask" | "sandbox_fallback"
+    decision: str  # "allow" | "deny" | "ask"
     reason: str = ""  # Additional explanation (e.g. violation cause)
     extra: dict = field(default_factory=dict)
 

@@ -107,32 +107,4 @@ describe("agentApi", () => {
     });
     expect(result).toEqual({ language: "zh", copied_files: ["a.txt"] });
   });
-
-  it("updateAudioMode sends PUT with audio_mode in body", async () => {
-    await agentApi.updateAudioMode("push_to_talk");
-    expect(request).toHaveBeenCalledWith("/workspace/audio-mode", {
-      method: "PUT",
-      body: JSON.stringify({ audio_mode: "push_to_talk" }),
-    });
-  });
-
-  it("getLocalWhisperStatus calls GET /agent/local-whisper-status", async () => {
-    const status = {
-      available: true,
-      ffmpeg_installed: true,
-      whisper_installed: true,
-    };
-    vi.mocked(request).mockResolvedValue(status);
-    const result = await agentApi.getLocalWhisperStatus();
-    expect(request).toHaveBeenCalledWith("/workspace/local-whisper-status");
-    expect(result).toEqual(status);
-  });
-
-  it("updateTranscriptionProvider sends PUT with provider_id", async () => {
-    await agentApi.updateTranscriptionProvider("openai");
-    expect(request).toHaveBeenCalledWith("/workspace/transcription-provider", {
-      method: "PUT",
-      body: JSON.stringify({ provider_id: "openai" }),
-    });
-  });
 });

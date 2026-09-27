@@ -1,8 +1,7 @@
-import { Button, Tag } from "@agentscope-ai/design";
+import { Button } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { formatTime, type Session } from "./constants";
-import { CHANNEL_COLORS } from "../../../../constants/channel";
 import styles from "../index.module.less";
 
 interface ColumnHandlers {
@@ -51,15 +50,6 @@ export const createColumns = (
       dataIndex: "user_id",
       key: "user_id",
       width: 150,
-    },
-    {
-      title: "Channel",
-      dataIndex: "channel",
-      key: "channel",
-      width: 120,
-      render: (channel: string) => (
-        <Tag color={CHANNEL_COLORS[channel] || "default"}>{channel}</Tag>
-      ),
     },
     {
       title: "CreatedAt",

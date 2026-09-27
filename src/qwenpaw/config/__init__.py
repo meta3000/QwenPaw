@@ -11,7 +11,6 @@ from .config import (
     ToolGuardRuleConfig,
     ModelSlotConfig,
     ActiveModelsInfo,
-    VisualCompactConfig,
 )
 from .utils import (
     get_available_channels,
@@ -38,7 +37,6 @@ __all__ = [
     "ToolGuardRuleConfig",
     "ModelSlotConfig",
     "ActiveModelsInfo",
-    "VisualCompactConfig",
     "get_available_channels",
     "get_config_path",
     "get_heartbeat_config",

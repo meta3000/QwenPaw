@@ -214,9 +214,7 @@ describe("SettingsCenter", () => {
     const EmptyPage = () => null;
     registry.routes = [
       { id: "core.security", path: "/security", Component: EmptyPage },
-      { id: "core.channels", path: "/channels", Component: EmptyPage },
       { id: "core.cron-jobs", path: "/cron-jobs", Component: EmptyPage },
-      { id: "core.heartbeat", path: "/heartbeat", Component: EmptyPage },
     ];
 
     renderWithProviders(<SettingsCenter />, {
@@ -232,12 +230,7 @@ describe("SettingsCenter", () => {
     expect(globalGroup).not.toBeNull();
     expect(agentGroup).not.toBeNull();
     expect(within(globalGroup!).getByText("Security")).toBeVisible();
-    expect(within(globalGroup!).queryByText("Channels")).toBeNull();
     expect(within(globalGroup!).queryByText("Cron Jobs")).toBeNull();
-    expect(within(globalGroup!).queryByText("Heartbeat")).toBeNull();
-    expect(within(agentGroup!).getByText("Channels")).toBeVisible();
-    expect(within(agentGroup!).queryByText("Cron Jobs")).toBeNull();
-    expect(within(agentGroup!).getByText("Heartbeat")).toBeVisible();
   });
 
   it("keeps sidebar customization out of General settings", () => {
@@ -266,8 +259,6 @@ describe("SettingsCenter", () => {
   it("expands agent pages and keeps their sidebar controls", async () => {
     const EmptyPage = () => null;
     const agentPages = [
-      ["core.channels", "/channels", "Channels"],
-      ["core.heartbeat", "/heartbeat", "Heartbeat"],
       ["core.skills", "/skills", "Skills"],
       ["core.tools", "/tools", "Tools"],
       ["core.mcp", "/mcp", "MCP"],

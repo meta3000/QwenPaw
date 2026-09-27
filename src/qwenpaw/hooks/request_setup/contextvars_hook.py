@@ -236,27 +236,9 @@ def _resolve_turn_project_dirs(
     )
 
     inherited = False
-    fork_dir = None
     request_override = None
 
     if request_context is not None:
-        # Forked subagents must resolve relative file/shell paths against
-        # the worktree they were assigned, and must not be able to escape
-        # it. Validate before handing it to the resolver, which trusts it.
-        # Allowed roots: every bound project dir (agent default and the
-        # session list alike) plus the workspace — a fork may target any
-        # repository the user attached to this agent/chat.
-        from ...agents.fork_project import resolve_allowed_fork_project_dir
-
-        allowed_dirs: list[str] = []
-        if isinstance(agent_project_dir, str) and agent_project_dir:
-            allowed_dirs.append(agent_project_dir)
-        allowed_dirs.extend(_entry_path_strings(session_project_dirs))
-        fork_dir = resolve_allowed_fork_project_dir(
-            request_context.get("fork_project_dir"),
-            workspace_dir=workspace_dir,
-            project_dirs=allowed_dirs,
-        )
         request_override = _trusted_request_project_dir(request_context)
         if session_project_dirs is None:
             inherited_dirs = _inherited_project_dirs(request_context)
@@ -272,7 +254,6 @@ def _resolve_turn_project_dirs(
             agent_project_dir=agent_project_dir,
             session_project_dirs=session_project_dirs,
             request_override=request_override,
-            fork_project_dir=str(fork_dir) if fork_dir else None,
         )
     except ValueError:
         logger.warning(

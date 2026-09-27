@@ -26,7 +26,6 @@ from typing import Any, List, Optional
 import yaml
 
 from .tool_registry import ToolRegistry, DEFAULT_REGISTRY
-from ..sandbox import SandboxConfig
 from ..utils.io_utils import write_yaml_atomic
 
 logger = logging.getLogger(__name__)
@@ -40,15 +39,12 @@ class GovernanceAction(str, Enum):
     ALLOW = "allow"
     DENY = "deny"
     ASK = "ask"
-    # bash tool with no hit → sandbox fallback
-    SANDBOX_FALLBACK = "sandbox_fallback"
 
 
 @dataclass
 class GovernanceDecision:
     action: GovernanceAction
     reason: str
-    sandbox_config: SandboxConfig | None = None
     findings: list[Any] | None = None  # GuardFinding list for approval card
     # Origin of the decision, surfaced as the "Source" line on the approval
     # card. Identifies which policy mechanism drove the decision:
@@ -58,7 +54,6 @@ class GovernanceDecision:
     #   "detection_rules"       — Phase 1 finding (pattern_detector)
     #   "shell_evasion_checks"  — Phase 1 finding (shell_evasion_detector)
     #   "shell_danger_keywords" — Phase 1.5 hardcoded shell-danger regex
-    #   "sandbox"               — Phase 3 shell sandbox fallback
     #   "No rule hit"           — Phase 3 fallback (no rule/finding matched)
     source: str = "No rule hit"
 
@@ -106,15 +101,10 @@ class GovernanceRule:
         GovernanceRule(match="Read(src/**)", action=GovernanceAction.ALLOW,
                    grantee="agent-abc", duration="session")
 
-    Action semantics vary by tool type:
-        Explicit-resource tools:
-            allow → execute directly (no sandbox)
-            deny  → reject
-            ask   → ask user, execute directly after approval
-        Bash-type tools:
-            allow → execute in sandbox (pre-authorized, no violation expected)
-            deny  → reject (no sandbox)
-            ask   → ask user, execute in sandbox after approval
+    Action semantics:
+        allow → execute directly
+        deny  → reject
+        ask   → ask user, execute after approval
     """
 
     match: str  # "ToolName(pattern)"
@@ -318,7 +308,7 @@ def _check_shell_danger_keywords(command: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Default sandbox deny_paths — paths forbidden for sandbox processes
+# Default env blacklist for shell tools
 # ---------------------------------------------------------------------------
 
 DEFAULT_ENV_BLACKLIST: List[str] = [
@@ -327,56 +317,6 @@ DEFAULT_ENV_BLACKLIST: List[str] = [
     "AWS_SECRET_ACCESS_KEY",
     "AWS_ACCESS_KEY_ID",
 ]
-
-
-DEFAULT_SANDBOX_DENY_PATHS: List[str] = [
-    # SSH keys and config
-    "~/.ssh",
-    # AWS credentials
-    "~/.aws",
-    # GPG keys
-    "~/.gnupg",
-    # Kubernetes config
-    "~/.kube",
-    # Google Cloud credentials
-    "~/.config/gcloud",
-    # Azure CLI credentials
-    "~/.azure",
-    # Docker auth config
-    "~/.docker/config.json",
-    # Generic env files (may contain secrets)
-    "~/.env",
-    # Claude Code config & memory
-    "~/.claude",
-    # macOS Keychain database
-    "~/Library/Keychains",
-    # Browser credentials
-    "~/Library/Application Support/Google/Chrome/Default/Login Data",
-    "~/Library/Application Support/Firefox/Profiles",
-    # Git credentials
-    "~/.git-credentials",
-    "~/.gitconfig",  # may contain tokens in URL
-    # Terraform state (may contain sensitive outputs)
-    "~/.terraformrc",
-    # HashiCorp Vault token
-    "~/.vault-token",
-    # npm / yarn auth tokens
-    "~/.npmrc",
-    "~/.yarnrc",
-    # pip / PyPI API tokens
-    "~/.pypirc",
-    # Other common sensitive configs
-    # NOTE: ~/.config/gh intentionally excluded — gh CLI needs to read its
-    # auth config (hosts.yml) for operations. The gh ALLOW rule + DENY for
-    # destructive subcommands provides the safety boundary instead.
-    "~/.config/nix",  # Nix config
-    "~/.netrc",  # generic login credentials
-]
-
-FILE_READ_TOOLS: frozenset[str] = frozenset(
-    {"Read", "ViewImage", "ViewVideo", "SendFileToUser"},
-)
-FILE_WRITE_TOOLS: frozenset[str] = frozenset({"Write", "Edit", "Append"})
 
 
 # ---------------------------------------------------------------------------
@@ -707,7 +647,7 @@ class GovernancePolicy:
                      (builtin_rules + user_rules)
             Phase 3: Fallback + execution_level threshold
                      shell: findings honored (MEDIUM+ -> ASK in SMART),
-                     else SANDBOX_FALLBACK; other tools -> fallback
+                     else ALLOW; other tools -> fallback
 
         Returns: GovernanceDecision (with optional findings attached)
         """
@@ -850,19 +790,17 @@ class GovernancePolicy:
             # honor the execution-level severity threshold. MEDIUM+ findings
             # in SMART, or any finding in AUTO/OFF, escalate to ASK so the
             # user's own detection rules take effect for shell tools too.
-            # INFO/LOW findings (fallback returns ALLOW) fall through to the
-            # sandbox path below, where sandbox isolation is the safety net.
+            # INFO/LOW findings (fallback returns ALLOW) fall through.
             if findings:
                 fb = self._apply_execution_level_fallback(tc_spec, findings)
                 if fb.action is not GovernanceAction.ALLOW:
                     return fb
-            # No findings (or only INFO/LOW): route to sandbox. When the
-            # sandbox is unusable, ResourceGovernor downgrades this to ALLOW.
+            # No findings (or only INFO/LOW): allow execution.
             return GovernanceDecision(
-                action=GovernanceAction.SANDBOX_FALLBACK,
-                reason="sandbox fallback",
+                action=GovernanceAction.ALLOW,
+                reason="shell fallback",
                 findings=findings or None,
-                source="sandbox",
+                source="shell_fallback",
             )
         return self._apply_execution_level_fallback(tc_spec, findings)
 
